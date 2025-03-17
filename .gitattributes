@@ -1,0 +1,59 @@
+# Unity
+*.unity filter=lfs diff=lfs merge=lfs -text
+*.asset filter=lfs diff=lfs merge=lfs -text
+*.prefab filter=lfs diff=lfs merge=lfs -text
+
+# Images
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.png filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+*.ai filter=lfs diff=lfs merge=lfs -text
+*.tif filter=lfs diff=lfs merge=lfs -text
+*.tga filter=lfs diff=lfs merge=lfs -text
+*.cubemap filter=lfs diff=lfs merge=lfs -text
+*.svg filter=lfs diff=lfs merge=lfs -text
+
+# Audio
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.ogg filter=lfs diff=lfs merge=lfs -text
+*.aif filter=lfs diff=lfs merge=lfs -text
+
+# Video
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
+*.avi filter=lfs diff=lfs merge=lfs -text
+
+# 3D Objects
+*.FBX filter=lfs diff=lfs merge=lfs -text
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text
+*.obj filter=lfs diff=lfs merge=lfs -text
+*.max filter=lfs diff=lfs merge=lfs -text
+*.dae filter=lfs diff=lfs merge=lfs -text
+*.mb filter=lfs diff=lfs merge=lfs -text
+*.ma filter=lfs diff=lfs merge=lfs -text
+*.3ds filter=lfs diff=lfs merge=lfs -text
+*.dfx filter=lfs diff=lfs merge=lfs -text
+*.c4d filter=lfs diff=lfs merge=lfs -text
+*.lwo filter=lfs diff=lfs merge=lfs -text
+*.lwo2 filter=lfs diff=lfs merge=lfs -text
+*.abc filter=lfs diff=lfs merge=lfs -text
+*.3dm filter=lfs diff=lfs merge=lfs -text
+
+# Libraries
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.unitypackage filter=lfs diff=lfs merge=lfs -text
+*.anim filter=lfs diff=lfs merge=lfs -text
+*.bundle filter=lfs diff=lfs merge=lfs -text
+
+# Fonts
+*.ttf filter=lfs diff=lfs merge=lfs -text
+*.otf filter=lfs diff=lfs merge=lfs -text
+
+# Other
+*.pdf filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text 

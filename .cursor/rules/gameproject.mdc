@@ -1,0 +1,103 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+# Unity Development Best Practices
+
+## 📂 Project Structure
+- Organize by **feature**, not by type (e.g., `CombatSystem/AttackHandler.cs` instead of `Scripts/Combat/`).
+- Use **maximum 3 levels of nesting** to maintain clarity.
+- Keep related **assets, prefabs, and scripts** together.
+- Follow a **consistent naming convention** (e.g., `GridManager`, `PathfindingService`, `CharacterStats`).
+- Document folder structures for new developers.
+
+## 📖 Documentation Standards
+
+### 📝 Code Documentation
+- **Document public APIs** and complex logic.
+- Use **XML comments** for methods and classes.
+- Provide **usage examples** where necessary.
+
+### 📜 Project Documentation
+- Maintain **README** files for major systems.
+- Document **scene dependencies**.
+- Include **setup instructions** for onboarding new team members.
+
+## 🚀 Performance Optimization
+
+### 🧠 Memory Management
+- **Cache** frequently accessed components.
+- Use **object pooling** for repeated entity instantiation.
+- Avoid **heap allocations** in `Update()` and `FixedUpdate()`.
+- Clear event listeners in `OnDisable()` to prevent memory leaks.
+
+### ⚡ Optimization Techniques
+- **Batch similar operations** (e.g., multiple pathfinding requests).
+- Use **structs instead of classes** where applicable for lightweight data.
+- Optimize **collision detection** by limiting checks to relevant objects.
+- Regularly **profile performance** using Unity's **Profiler**.
+
+## 🕹️ Unity Best Practices
+
+### 🔧 Component-Based Design
+- Follow the **Single Responsibility Principle**.
+- Use **interface-based communication**.
+- Apply **dependency injection** where possible.
+- Favor **component reusability**.
+
+### 🎮 Scene Management
+- Maintain a **clear scene hierarchy**.
+- Utilize **proper prefab usage**.
+- Document **scene dependencies**.
+- Implement **async scene loading** for smoother transitions.
+
+## ⏳ Asynchronous Programming (UniTask)
+
+### 📌 Best Practices
+- **All async methods must end with `Async`** (e.g., `LoadCharacterDataAsync()`).
+- Always return `UniTask` or `UniTask<T>` for async operations.
+- **Avoid mixing `UniTask` with C# `Task`**.
+- Use `CancellationToken` for **safe task cancellation**.
+- Implement cleanup in `OnDisable()` and `OnDestroy()`.
+- Catch `OperationCanceledException` separately to avoid crashes.
+
+## 🔀 Version Control (Git)
+
+### ✅ Git Best Practices
+- Use **clear commit messages** (`feat: Added pathfinding cache`).
+- Follow **feature branch workflow** (`feature/grid-system`, `fix/movement-bug`).
+- Make **regular commits** instead of large, infrequent updates.
+- Maintain a **proper `.gitignore`** to avoid committing unnecessary files.
+
+### 🗃️ Asset Management in Git
+- Handle **binary files properly** to avoid merge conflicts.
+- Keep **meta files versioned** for Unity projects.
+- Use **Git LFS** for large assets if needed.
+
+## 🛠️ Quality Assurance & Testing
+
+### 🔍 Code Review
+- Follow **consistent coding style** (e.g., naming conventions, indentation).
+- Verify **performance impact** of new features.
+- Ensure **error handling** is properly implemented.
+
+### 🧪 Testing Requirements
+- Write **unit tests** for core systems.
+- Perform **integration testing** for interactions between systems.
+- Test **async operations** to detect race conditions.
+- Profile and optimize performance bottlenecks.
+
+## ✅ Why Follow These Rules?
+Adhering to these guidelines ensures:
+- **📌 Scalable & maintainable codebase**
+- **⚡ Optimized performance for smooth gameplay**
+- **🔄 Efficient development workflow**
+- **📂 Clear organization & easier collaboration**
+- **🚀 Faster development cycles & fewer bugs**
+
