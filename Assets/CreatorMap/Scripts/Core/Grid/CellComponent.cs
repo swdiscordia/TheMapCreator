@@ -26,16 +26,25 @@ namespace Components.Maps
         /// <summary>
         /// Is the cell currently highlighted
         /// </summary>
-        public bool IsHighlighted { get; set; }
+        public bool IsHighlighted { get; private set; }
         
         /// <summary>
-        /// The sprite renderer component
+        /// The line renderer component
         /// </summary>
-        private SpriteRenderer _renderer;
+        private LineRenderer _lineRenderer;
+        
+        /// <summary>
+        /// The original material color before highlighting
+        /// </summary>
+        private Color _originalColor;
         
         private void Awake()
         {
-            _renderer = GetComponent<SpriteRenderer>();
+            _lineRenderer = GetComponent<LineRenderer>();
+            if (_lineRenderer != null)
+            {
+                _originalColor = _lineRenderer.material.color;
+            }
         }
         
         /// <summary>
@@ -43,10 +52,13 @@ namespace Components.Maps
         /// </summary>
         public void Highlight(Color? color = null)
         {
-            if (_renderer != null)
+            if (_lineRenderer != null)
             {
                 IsHighlighted = true;
-                _renderer.color = color ?? HighlightColor;
+                var highlightColor = color ?? HighlightColor;
+                _lineRenderer.material.color = highlightColor;
+                _lineRenderer.startColor = highlightColor;
+                _lineRenderer.endColor = highlightColor;
             }
         }
         
@@ -55,10 +67,12 @@ namespace Components.Maps
         /// </summary>
         public void ResetHighlight()
         {
-            if (_renderer != null)
+            if (_lineRenderer != null)
             {
                 IsHighlighted = false;
-                _renderer.color = Color.white;
+                _lineRenderer.material.color = _originalColor;
+                _lineRenderer.startColor = Color.white;
+                _lineRenderer.endColor = Color.white;
             }
         }
     }

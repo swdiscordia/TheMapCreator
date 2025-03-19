@@ -314,6 +314,13 @@ namespace MapCreator.Editor
                 lineRenderer.SetPosition(0, new Vector3(0, 0, 0)); // Premier point à (0,0,0)
                 lineRenderer.SetPosition(1, new Vector3(0, 0, 1)); // Deuxième point à (0,0,1)
                 
+                // Keep original color (same as walkable)
+                Material transparentMaterial = new Material(Shader.Find("Sprites/Default"));
+                transparentMaterial.color = s_WalkableColor;
+                lineRenderer.material = transparentMaterial;
+                lineRenderer.startColor = new Color(1, 1, 1, 1f);
+                lineRenderer.endColor = new Color(1, 1, 1, 1f);
+                
                 Debug.Log($"SetupNonWalkableCell: Set LineRenderer to have exactly two points: (0,0,0) and (0,0,1)");
             }
             
@@ -410,10 +417,9 @@ namespace MapCreator.Editor
                     }
                     else
                     {
-                        // Create a default material based on walkability
-                        bool isWalkable = s_LastHighlightedCell.Cell != null && s_LastHighlightedCell.Cell.IsWalkable;
+                        // Create a default material with the walkable color (non-walkable cells also use the same color)
                         Material newMaterial = new Material(Shader.Find("Sprites/Default"));
-                        newMaterial.color = isWalkable ? s_WalkableColor : s_NonWalkableColor;
+                        newMaterial.color = s_WalkableColor;
                         lineRenderer.sharedMaterial = newMaterial;
                         
                         // Store for future use

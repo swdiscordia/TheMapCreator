@@ -1,0 +1,28 @@
+{
+    "id": 100000088,
+    "leftNeighbourId": -1,
+    "rightNeighbourId": -1,
+    "topNeighbourId": -1,
+    "bottomNeighbourId": -1,
+    "SpriteData": {
+        "Tiles": [
+            {
+                "Id": "1062",
+                "Position": {
+                    "x": 3.54862642288208,
+                    "y": 1.8011128902435303
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            }
+        ],
+        "Fixtures": []
+    }
+}

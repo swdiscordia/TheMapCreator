@@ -1,0 +1,172 @@
+{
+    "id": 100000093,
+    "leftNeighbourId": -1,
+    "rightNeighbourId": -1,
+    "topNeighbourId": -1,
+    "bottomNeighbourId": -1,
+    "SpriteData": {
+        "Tiles": [
+            {
+                "Id": "1005",
+                "Position": {
+                    "x": 3.4161667823791506,
+                    "y": 3.097601890563965
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "10461",
+                "Position": {
+                    "x": 2.6439640522003176,
+                    "y": 0.4224993586540222
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "1005",
+                "Position": {
+                    "x": 3.9257988929748537,
+                    "y": 2.7995150089263918
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "1051",
+                "Position": {
+                    "x": 2.4257493019104006,
+                    "y": 4.068787574768066
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "10641",
+                "Position": {
+                    "x": 4.321020126342773,
+                    "y": -0.325925350189209
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "1005",
+                "Position": {
+                    "x": 3.262315511703491,
+                    "y": 2.8091306686401369
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "10610",
+                "Position": {
+                    "x": 3.4117989540100099,
+                    "y": 0.10992938280105591
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "1062",
+                "Position": {
+                    "x": 0.9286990165710449,
+                    "y": 5.830496788024902
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "10496",
+                "Position": {
+                    "x": 5.24233341217041,
+                    "y": 1.3051505088806153
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            },
+            {
+                "Id": "1004",
+                "Position": {
+                    "x": 3.3656187057495119,
+                    "y": 3.487550973892212
+                },
+                "Scale": 1.0,
+                "Order": 0,
+                "FlipX": false,
+                "Color": {
+                    "Red": 1.0,
+                    "Green": 1.0,
+                    "Blue": 1.0,
+                    "Alpha": 1.0
+                }
+            }
+        ],
+        "Fixtures": []
+    }
+}

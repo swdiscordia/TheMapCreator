@@ -25,7 +25,7 @@ namespace Models.Maps
     }
 
     [Serializable]
-    public class TileSprite
+    public class TileSpriteModelData
     {
         public int Id { get; private set; }
         public int Level { get; set; }
@@ -35,13 +35,13 @@ namespace Models.Maps
         public bool FlipX { get; set; }
         public bool FlipY { get; set; }
 
-        public TileSprite()
+        public TileSpriteModelData()
         {
             Cells = new List<MapPoint>();
             ColorMultiplicator = new TileColorMultiplicator();
         }
 
-        public TileSprite(int id, int level)
+        public TileSpriteModelData(int id, int level)
         {
             Id = id;
             Level = level;
