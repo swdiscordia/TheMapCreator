@@ -70,7 +70,6 @@ namespace MapCreator.Editor
         private static MapCreatorWindow Instance { get; set; }
 
         private bool m_UseClipping = true; // New variable for clipping toggle
-        private bool m_ShowPlacementConfirmation = false; // Whether to show a confirmation dialog after placing a tile
 
         [MenuItem("Window/Map Creator/Map Creator", false, 100)]
         public static void ShowWindow()
@@ -359,17 +358,8 @@ namespace MapCreator.Editor
                 EditorGUILayout.BeginHorizontal();
                 GUILayout.Label("Snap to Grid:", GUILayout.Width(80));
                 m_UseClipping = EditorGUILayout.Toggle(m_UseClipping, GUILayout.Width(20));
-                GUI.backgroundColor = m_UseClipping ? Color.green : Color.gray;
+                GUI.backgroundColor = m_UseClipping ? Color.yellow : Color.gray;
                 GUILayout.Label(m_UseClipping ? "ON" : "OFF", EditorStyles.boldLabel);
-                GUI.backgroundColor = Color.white;
-                EditorGUILayout.EndHorizontal();
-                
-                // Add confirmation toggle
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Show Confirmation:", GUILayout.Width(120));
-                m_ShowPlacementConfirmation = EditorGUILayout.Toggle(m_ShowPlacementConfirmation, GUILayout.Width(20));
-                GUI.backgroundColor = m_ShowPlacementConfirmation ? Color.yellow : Color.gray;
-                GUILayout.Label(m_ShowPlacementConfirmation ? "ON" : "OFF", EditorStyles.boldLabel);
                 GUI.backgroundColor = Color.white;
                 EditorGUILayout.EndHorizontal();
                 
@@ -2075,14 +2065,6 @@ namespace MapCreator.Editor
                 // Force scene repaint
                 SceneView.RepaintAll();
                 
-                // Show a dialog to confirm placement only if that option is enabled
-                if (m_ShowPlacementConfirmation)
-                {
-                    EditorUtility.DisplayDialog("Tile Placed", 
-                        $"Tile '{m_SelectedTile.Id}' successfully placed at position {tileObject.transform.position}.", 
-                        "Continue");
-                }
-                
                 // Log a VERY obvious message to make sure the user sees it happened
                 Debug.Log($"███ TILE PLACEMENT SUCCESSFUL! ███ Tile {m_SelectedTile.Id} at {tileObject.transform.position}");
             }
@@ -2293,12 +2275,9 @@ namespace MapCreator.Editor
                 SceneView.RepaintAll();
                 
                 // Show a dialog to confirm placement
-                if (m_ShowPlacementConfirmation)
-                {
-                    EditorUtility.DisplayDialog("Tile Placed", 
-                        $"Tile '{m_SelectedTile.Id}' successfully placed at position {tileObject.transform.position}.", 
-                        "Continue");
-                }
+                EditorUtility.DisplayDialog("Tile Placed", 
+                    $"Tile '{m_SelectedTile.Id}' successfully placed at position {tileObject.transform.position}.", 
+                    "Continue");
                 
                 Debug.Log($"Tile placement complete for {tileName}");
             }
