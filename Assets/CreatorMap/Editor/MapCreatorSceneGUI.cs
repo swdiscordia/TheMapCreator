@@ -828,6 +828,9 @@ namespace MapCreator.Editor
             // Use the clean numeric ID directly from tileData.Id
             string numericId = tileData.Id;
             
+            // IMPORTANT: DON'T adjust position - use exactly what was passed in
+            // This will match the preview position exactly
+            
             // Check if the tile already exists at this position with this id
             var existingTiles = GameObject.FindObjectsOfType<GameObject>()
                 .Where(go => go.transform.position == position && go.name.Contains(numericId))
@@ -845,8 +848,11 @@ namespace MapCreator.Editor
             // Create a GameObject with just the addressable path (no prefix duplicating what's already in the path)
             var tileObj = new GameObject(addressablePath);
             
-            // Set position to the cell's center
+            // Use EXACT position with no adjustments
             tileObj.transform.position = position;
+            
+            // Get texture to create sprite
+            Texture2D tileTexture = FindTileTexture(tileData.Id);
             
             // Add SpriteRenderer component
             var renderer = tileObj.AddComponent<SpriteRenderer>();
@@ -856,19 +862,6 @@ namespace MapCreator.Editor
             
             // Apply scale
             tileObj.transform.localScale = new Vector3(tileData.Scale, tileData.Scale, 1f);
-            
-            // Apply color if not default
-            if (!tileData.Color.IsOne)
-            {
-                renderer.color = tileData.Color.ToColor();
-            }
-            
-            // Set parent to map component
-            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
-            if (mapComponent != null)
-            {
-                tileObj.transform.SetParent(mapComponent.transform);
-            }
             
             // Add TileSprite component for identification with ploup
             var tileSprite = tileObj.AddComponent<CreatorMap.Scripts.TileSprite>();
@@ -882,81 +875,174 @@ namespace MapCreator.Editor
             tileSprite.flipX = tileData.FlipX;
             tileSprite.flipY = tileData.FlipY;
             
-            // Default to true for colorMultiplicatorIsOne (default color is white)
-            tileSprite.colorMultiplicatorIsOne = true;
+            // Set colorMultiplicatorIsOne based on the tile data color
+            tileSprite.colorMultiplicatorIsOne = tileData.Color.IsOne;
             
-            // Set color multiplier - only if not using default color
-            if (!tileData.Color.IsOne)
+            // Set color multiplier - default to special color values if using default color
+            if (tileData.Color.IsOne)
             {
-                // If using custom color, set colorMultiplicatorIsOne to false
-                tileSprite.colorMultiplicatorIsOne = false;
-                
-                // Set the custom color values
+                // Use a bright yellow color as default (like in main project)
+                tileSprite.colorMultiplicatorR = 264f;
+                tileSprite.colorMultiplicatorG = 256f;
+                tileSprite.colorMultiplicatorB = 200f;
+                tileSprite.colorMultiplicatorA = 0f;
+            }
+            else
+            {
+                // Use custom color values from tileData
                 tileSprite.colorMultiplicatorR = tileData.Color.Red;
                 tileSprite.colorMultiplicatorG = tileData.Color.Green;
                 tileSprite.colorMultiplicatorB = tileData.Color.Blue;
                 tileSprite.colorMultiplicatorA = tileData.Color.Alpha;
             }
-            else
-            {
-                // Ensure default values for color multiplier if IsOne is true
-                tileSprite.colorMultiplicatorR = 1f;
-                tileSprite.colorMultiplicatorG = 1f;
-                tileSprite.colorMultiplicatorB = 1f;
-                tileSprite.colorMultiplicatorA = 1f;
-            }
             
-            // Try to load sprite from AssetDatabase for editor preview
-            try
+            // Always load and apply the ColorMatrixShader
+            Shader colorMatrixShader = Shader.Find("Custom/ColorMatrixShader");
+            if (colorMatrixShader != null)
             {
-                string path = NewMapCreatorWindowType.Instance.GetAssetPath(tileData.Id);
-                if (!string.IsNullOrEmpty(path))
+                // Create the material with our shader
+                Material material = new Material(colorMatrixShader);
+                
+                // If we found a texture, create a sprite from it
+                if (tileTexture != null)
                 {
-                    Debug.Log($"Loading sprite from path: {path}");
-                    Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
-                    if (sprite != null)
-                    {
-                        renderer.sprite = sprite;
-                        Debug.Log($"Successfully loaded sprite for tile {tileData.Id}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"Failed to load sprite at path: {path}");
-                        CreatePlaceholderSprite(renderer);
-                    }
+                    // Apply texture to the material
+                    material.SetTexture("_MainTex", tileTexture);
+                    material.SetFloat("_UseDefaultShape", 0f); // Use the texture, not default shape
+                    
+                    // IMPORTANT: Use the same pivot for both ground tiles and fixtures
+                    // This ensures visual consistency with the preview
+                    Vector2 pivot = new Vector2(0.5f, 0.5f); // Center pivot for all tiles
+                    
+                    // Create the sprite with the center pivot
+                    var sprite = Sprite.Create(tileTexture, new Rect(0, 0, tileTexture.width, tileTexture.height), pivot);
+                    renderer.sprite = sprite;
+                    
+                    Debug.Log($"Created tile at exact position {position} with type {tileSprite.type}, pivot {pivot}");
                 }
                 else
                 {
-                    Debug.LogWarning($"No asset path found for tile ID: {tileData.Id}");
-                    // Fall back to loading by addressable path
-                    string assetPath = $"Assets/CreatorMap/Tiles/{numericId.Substring(0, Math.Min(2, numericId.Length))}/{numericId}.png";
-                    Debug.Log($"Trying alternative path: {assetPath}");
-                    
-                    if (System.IO.File.Exists(assetPath))
+                    // No texture found, enable default shape rendering in shader
+                    material.SetFloat("_UseDefaultShape", 1f);
+                    material.SetFloat("_CircleRadius", 0.5f);
+                }
+                
+                // Apply color to material only if not using default color
+                if (!tileSprite.colorMultiplicatorIsOne)
+                {
+                    // Apply different color handling based on tile type
+                    if (tileSprite.type == 0) // Ground tile
                     {
-                        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
-                        if (sprite != null)
+                        material.SetColor(Shader.PropertyToID("_Color"), new Color(
+                            tileSprite.colorMultiplicatorR / 255f,
+                            tileSprite.colorMultiplicatorG / 255f,
+                            tileSprite.colorMultiplicatorB / 255f,
+                            1f
+                        ));
+                    }
+                    else // Fixture
+                    {
+                        // Check if using high range values
+                        bool useHighRange = tileSprite.colorMultiplicatorR > 1.0f || 
+                                          tileSprite.colorMultiplicatorG > 1.0f || 
+                                          tileSprite.colorMultiplicatorB > 1.0f;
+                        
+                        if (useHighRange)
                         {
-                            renderer.sprite = sprite;
-                            Debug.Log($"Successfully loaded sprite from alternative path");
+                            material.SetColor(Shader.PropertyToID("_Color"), new Color(
+                                tileSprite.colorMultiplicatorR / 255f,
+                                tileSprite.colorMultiplicatorG / 255f,
+                                tileSprite.colorMultiplicatorB / 255f,
+                                tileSprite.colorMultiplicatorA > 1.0f ? tileSprite.colorMultiplicatorA / 255f : tileSprite.colorMultiplicatorA
+                            ));
                         }
                         else
                         {
-                            CreatePlaceholderSprite(renderer);
+                            material.SetColor(Shader.PropertyToID("_Color"), new Color(
+                                tileSprite.colorMultiplicatorR,
+                                tileSprite.colorMultiplicatorG,
+                                tileSprite.colorMultiplicatorB,
+                                tileSprite.colorMultiplicatorA
+                            ));
                         }
                     }
-                    else
-                    {
-                        CreatePlaceholderSprite(renderer);
-                    }
+                    
+                    // Apply material to renderer
+                    renderer.sharedMaterial = material;
                 }
             }
-            catch (System.Exception ex)
+
+            // Set parent to map component
+            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
+            if (mapComponent != null)
             {
-                Debug.LogWarning($"Could not load sprite directly: {ex.Message}. Using fallback sprite.");
-                // Fallback - create a simple placeholder sprite
-                CreatePlaceholderSprite(renderer);
+                tileObj.transform.SetParent(mapComponent.transform);
             }
+
+            // Mark scene as dirty
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+        }
+
+        // Helper method to find a tile texture from various possible locations
+        private static Texture2D FindTileTexture(string tileId)
+        {
+            if (string.IsNullOrEmpty(tileId))
+                return null;
+                
+            Texture2D tileTexture = null;
+            
+            // Try to load from NewMapCreatorWindow's asset path first
+            var window = NewMapCreatorWindowType.Instance;
+            if (window != null)
+            {
+                string path = window.GetAssetPath(tileId);
+                if (!string.IsNullOrEmpty(path))
+                {
+                    tileTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                    if (tileTexture != null)
+                        return tileTexture;
+                }
+            }
+            
+            // Generate potential paths for the tile texture
+            List<string> possiblePaths = new List<string>();
+            
+            if (tileId.Length >= 2)
+            {
+                string subfolder = tileId.Substring(0, 2);
+                possiblePaths.AddRange(new string[]
+                {
+                    $"Assets/CreatorMap/Tiles/{subfolder}/{tileId}.png",
+                    $"Assets/CreatorMap/Content/Tiles/{subfolder}/{tileId}.png",
+                    $"Assets/CreatorMap/Tiles/{tileId}.png",
+                    $"Assets/CreatorMap/Content/Tiles/{tileId}.png"
+                });
+            }
+            else
+            {
+                possiblePaths.AddRange(new string[]
+                {
+                    $"Assets/CreatorMap/Tiles/{tileId}.png",
+                    $"Assets/CreatorMap/Content/Tiles/{tileId}.png"
+                });
+            }
+            
+            // Try each path
+            foreach (var path in possiblePaths)
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    tileTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                    if (tileTexture != null)
+                        return tileTexture;
+                }
+            }
+            
+            // If texture not found in asset paths, try Resources folder
+            tileTexture = Resources.Load<Texture2D>($"Tiles/{tileId}");
+            
+            return tileTexture;
         }
 
         private static void CreatePlaceholderSprite(SpriteRenderer renderer)
