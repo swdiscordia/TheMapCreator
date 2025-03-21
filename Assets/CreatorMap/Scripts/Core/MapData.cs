@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CreatorMap.Scripts.Data;
 
 namespace Managers.Maps.MapCreator
 {
@@ -18,5 +19,8 @@ namespace Managers.Maps.MapCreator
         public long topNeighbourId = -1;
         public long bottomNeighbourId = -1;
         public SerializableDictionary<ushort, ushort> cells = new SerializableDictionary<ushort, ushort>();
+        
+        // Add SpriteData property
+        public MapSpriteData SpriteData = new MapSpriteData();
     }
 } 

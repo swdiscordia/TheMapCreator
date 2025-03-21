@@ -38,7 +38,13 @@ namespace CreatorMap.Scripts.Data
         public float Scale = 1f;
         public int Order;
         public bool FlipX;
+        public bool FlipY;
         public TileColorData Color = new TileColorData();
+        public bool IsFixture = false;
+        
+        // Path to the sprite asset in the project
+        [NonSerialized] 
+        public string addressablePath = string.Empty; // Initialize with empty string to ensure it's always available
     }
     
     /// <summary>
