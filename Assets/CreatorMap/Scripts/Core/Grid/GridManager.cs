@@ -155,11 +155,13 @@ namespace CreatorMap.Scripts.Core.Grid
             {
                 if (gridData.cellsDict.TryGetValue(cellId, out cellData))
                 {
-                    // If CELL_WALKABLE bit is set, cell is NOT walkable (backwards from what you'd expect)
-                    const uint CELL_WALKABLE = 0x0001;
-                    isWalkable = (cellData & CELL_WALKABLE) == 0;
+                    // Force all cells to be walkable by ensuring bit 0 is 0
+                    cellData &= 0xFFFFFFFE; // Clear bit 0 using AND with all 1s except bit 0
+                    // Update the data in the dictionary
+                    gridData.cellsDict[cellId] = cellData;
                 }
             }
+            Debug.Log($"[GRID] Creating walkable cell {cellId} for proper tile placement");
 
             // Apply different visualization for walkable vs non-walkable cells
             if (isWalkable)

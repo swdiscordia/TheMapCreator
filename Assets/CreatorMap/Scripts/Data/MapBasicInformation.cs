@@ -123,6 +123,7 @@ namespace CreatorMap.Scripts.Data
             }
             
             Debug.Log($"[DATA_DEBUG] MapBasicInformation.InitializeAllCells - Initialisation terminée. Nombre de cellules: {cells.dictionary.Count}");
+            Debug.Log("[DATA_DEBUG] Toutes les cellules sont initialisées comme walkable (bit 0 = 0) pour permettre le placement des tiles");
         }
         
         public void ClearAllCells()
