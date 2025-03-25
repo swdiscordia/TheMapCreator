@@ -6,7 +6,7 @@ using System;
 using System.Linq;
 using CreatorMap.Scripts;
 using CreatorMap.Scripts.Data;
-using Managers.Maps.MapCreator;
+using MapCreator.Editor;
 using Components.Maps;
 // UPDATED: More explicit reference to NewMapCreatorWindow
 using NewMapCreatorWindowType = MapCreator.Editor.NewMapCreatorWindow;
@@ -358,8 +358,61 @@ namespace MapCreator.Editor
                 HighlightCell(cell);
             }
             
+            // AJOUT: Synchroniser les données avec le MapComponent
+            SynchronizeWithMapComponent(cell.CellId, (ushort)cell.Cell.Data);
+            
             // Force repaint to see changes immediately
             SceneView.RepaintAll();
+        }
+
+        /// <summary>
+        /// Synchronise les données de cellule modifiées avec le MapComponent
+        /// </summary>
+        private static void SynchronizeWithMapComponent(ushort cellId, ushort flags)
+        {
+            // Trouver le MapComponent dans la scène
+            var mapComponent = FindMapComponent();
+            if (mapComponent == null)
+            {
+                Debug.LogWarning("[EDITOR] Pas de MapComponent trouvé dans la scène pour synchroniser les données de cellule");
+                return;
+            }
+            
+            // Convertir ushort en uint pour compatibilité
+            uint flagsAsUint = (uint)flags;
+            
+            try
+            {
+                // S'assurer que le dictionnaire cells existe
+                if (mapComponent.mapInformation == null)
+                {
+                    mapComponent.mapInformation = new CreatorMap.Scripts.Data.MapBasicInformation();
+                }
+                
+                if (mapComponent.mapInformation.cells == null)
+                {
+                    mapComponent.mapInformation.cells = new CreatorMap.Scripts.Data.SerializableDictionary<ushort, uint>();
+                }
+                
+                // Mettre à jour directement dans le dictionnaire
+                if (mapComponent.mapInformation.cells.dictionary.ContainsKey(cellId))
+                {
+                    mapComponent.mapInformation.cells.dictionary[cellId] = flagsAsUint;
+                }
+                else
+                {
+                    mapComponent.mapInformation.cells.dictionary.Add(cellId, flagsAsUint);
+                }
+                
+                Debug.Log($"[EDITOR] Cell {cellId} updated with value {flagsAsUint}");
+                
+                // Marquer le composant comme modifié pour l'éditeur
+                UnityEditor.EditorUtility.SetDirty(mapComponent);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[EDITOR] Error updating cell {cellId}: {e.Message}");
+            }
         }
 
         private static void SetCellWalkable(CellComponent cell, bool walkable)
@@ -706,7 +759,7 @@ namespace MapCreator.Editor
             
             // Use the MapPoint.IsInMap logic to validate cells
             // This ensures we only interact with cells that are within the valid map area
-            short cellId = cell.CellId;
+            short cellId = (short)cell.CellId;  // Explicit cast from ushort to short
             
             // Validate using cell ID range - only cells in the appropriate range are valid
             return cellId >= 0 && cellId < Models.Maps.MapConstants.MapSize;
@@ -718,7 +771,7 @@ namespace MapCreator.Editor
             if (cell == null || tileData == null) return;
             
             // Find map component in scene
-            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
+            var mapComponent = FindMapComponent();
             if (mapComponent == null || mapComponent.mapInformation == null) return;
             
             // Get the cell center position - the key for proper placement
@@ -764,7 +817,7 @@ namespace MapCreator.Editor
                 mapComponent.mapInformation.SpriteData = new MapSpriteData();
             }
             
-            mapComponent.mapInformation.SpriteData.Tiles.Add(newTile);
+            mapComponent.mapInformation.SpriteData.tiles.Add(newTile);
             
             // Create visual representation in scene
             CreateTileVisualInEditor(cellPosition, newTile);
@@ -972,8 +1025,10 @@ namespace MapCreator.Editor
                 }
             }
 
-            // Set parent to map component
-            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
+            // Find the map component
+            var mapComponent = FindMapComponent();
+            
+            // Set the tile object as child of Map
             if (mapComponent != null)
             {
                 tileObj.transform.SetParent(mapComponent.transform);
@@ -1137,7 +1192,7 @@ namespace MapCreator.Editor
             if (tileData == null) return;
             
             // Find map component in scene
-            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
+            var mapComponent = FindMapComponent();
             if (mapComponent == null || mapComponent.mapInformation == null) return;
             
             // Check if we're placing a fixture
@@ -1168,7 +1223,7 @@ namespace MapCreator.Editor
                 mapComponent.mapInformation.SpriteData = new MapSpriteData();
             }
             
-            mapComponent.mapInformation.SpriteData.Tiles.Add(newTile);
+            mapComponent.mapInformation.SpriteData.tiles.Add(newTile);
             
             // Create visual representation in scene
             CreateTileVisualInEditor(position, newTile);
@@ -1840,6 +1895,10 @@ namespace MapCreator.Editor
         // Add this method after the PlaceTileAtPosition method
         private static void EraseTileAtPosition(Vector3 position)
         {
+            // Find map component in scene
+            var mapComponent = FindMapComponent();
+            if (mapComponent == null || mapComponent.mapInformation == null || mapComponent.mapInformation.SpriteData == null) return;
+            
             // Find all tile sprites in the scene
             var tilesInScene = GameObject.FindObjectsOfType<CreatorMap.Scripts.TileSprite>();
             if (tilesInScene == null || tilesInScene.Length == 0) return;
@@ -1848,11 +1907,6 @@ namespace MapCreator.Editor
             // Reduce the radius for more precision
             float eraseRadius = 0.25f; // Smaller radius for more precise erasing
             bool erasedAny = false;
-            
-            // Find map component
-            var mapComponent = GameObject.FindObjectOfType<MapComponent>();
-            if (mapComponent == null || mapComponent.mapInformation == null || 
-                mapComponent.mapInformation.SpriteData == null) return;
             
             // Find the closest tile to the click position
             CreatorMap.Scripts.TileSprite closestTile = null;
@@ -1889,7 +1943,7 @@ namespace MapCreator.Editor
                 
                 // Also remove it from the data structure
                 TileSpriteData tileToRemove = null;
-                foreach (var tile in mapComponent.mapInformation.SpriteData.Tiles)
+                foreach (var tile in mapComponent.mapInformation.SpriteData.tiles)
                 {
                     if (tile.Id == tileId && 
                         Vector2.Distance(tile.Position, new Vector2(tilePosition.x, tilePosition.y)) < 0.1f)
@@ -1902,7 +1956,7 @@ namespace MapCreator.Editor
                 // Remove the tile from the data
                 if (tileToRemove != null)
                 {
-                    mapComponent.mapInformation.SpriteData.Tiles.Remove(tileToRemove);
+                    mapComponent.mapInformation.SpriteData.tiles.Remove(tileToRemove);
                     erasedAny = true;
                 }
             }
@@ -1914,6 +1968,105 @@ namespace MapCreator.Editor
                     UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
                 Debug.Log("Erased tile at position: " + position);
             }
+        }
+
+        // Helper method to find the map component
+        private static Components.Maps.MapComponent FindMapComponent()
+        {
+            return GameObject.FindObjectOfType<Components.Maps.MapComponent>();
+        }
+
+        /// <summary>
+        /// Initialize the map component with correct structure for cells
+        /// </summary>
+        public static void InitializeMapComponent(Components.Maps.MapComponent mapComponent, int mapId)
+        {
+            if (mapComponent == null)
+            {
+                Debug.LogError("[EDITOR] Cannot initialize null MapComponent");
+                return;
+            }
+            
+            // Create map information if it doesn't exist
+            if (mapComponent.mapInformation == null)
+            {
+                mapComponent.mapInformation = new CreatorMap.Scripts.Data.MapBasicInformation();
+            }
+            
+            // ONLY ADD THE REQUIRED FIELDS - CLEAN IMPLEMENTATION
+            
+            // Set map ID
+            mapComponent.mapInformation.id = mapId;
+            
+            // Set default neighbor values to -1
+            mapComponent.mapInformation.leftNeighbourId = -1;
+            mapComponent.mapInformation.rightNeighbourId = -1;
+            mapComponent.mapInformation.topNeighbourId = -1;
+            mapComponent.mapInformation.bottomNeighbourId = -1;
+            
+            // Initialize the SerializableDictionary for cells if needed
+            if (mapComponent.mapInformation.cells == null)
+            {
+                mapComponent.mapInformation.cells = new CreatorMap.Scripts.Data.SerializableDictionary<ushort, uint>();
+            }
+            
+            // Initialize all cells (0-559) with all walkable by default (IsVisible = true)
+            // Default value: 64 (bit 6 = IsVisible)
+            const uint DEFAULT_CELL_FLAGS = 0x0040; // IsVisible flag (bit 6)
+            
+            for (ushort cellId = 0; cellId < 560; cellId++)
+            {
+                // Add to cells dictionary
+                if (mapComponent.mapInformation.cells.dictionary.ContainsKey(cellId))
+                {
+                    mapComponent.mapInformation.cells.dictionary[cellId] = DEFAULT_CELL_FLAGS;
+                }
+                else
+                {
+                    mapComponent.mapInformation.cells.dictionary.Add(cellId, DEFAULT_CELL_FLAGS);
+                }
+            }
+            
+            // Clean up all other unwanted fields and set to default values
+            CleanupMapComponent(mapComponent.mapInformation);
+            
+            // Make sure identifiedElements is initialized but empty
+            if (mapComponent.mapInformation.identifiedElements == null)
+            {
+                mapComponent.mapInformation.identifiedElements = new CreatorMap.Scripts.Data.SerializableDictionary<uint, uint>();
+            }
+            
+            // Set background color to black
+            mapComponent.backgroundColor = Color.black;
+            
+            Debug.Log($"[EDITOR] MapComponent initialized with ID {mapId} and {mapComponent.mapInformation.cells.dictionary.Count} cells");
+            
+            // Mark the component as dirty in the editor
+            UnityEditor.EditorUtility.SetDirty(mapComponent);
+        }
+        
+        /// <summary>
+        /// Cleanup a map component by removing all unwanted fields
+        /// </summary>
+        private static void CleanupMapComponent(CreatorMap.Scripts.Data.MapBasicInformation mapInfo)
+        {
+            // Clean up all explicitly unwanted fields
+            mapInfo.version = null;
+            mapInfo.updatedAt = null;
+            mapInfo.subAreaId = -1;
+            mapInfo.encrypted = false;
+            mapInfo.createWorldMapElements = false;
+            mapInfo.encryptionVersion = false;
+            mapInfo.backgroundsCount = 0;
+            mapInfo.isUsingNewMovementSystem = false;
+            mapInfo.useExternalFileToSave = false;
+            mapInfo.backgroundRasterization = false;
+            
+            // Clean up cellsList and other editor-only data that we don't want to serialize
+            mapInfo.cellsList.Clear();
+            mapInfo.SpriteData = null;
+            
+            Debug.Log("[EDITOR] MapComponent cleaned up - removed all unwanted fields");
         }
     }
 }

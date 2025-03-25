@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using MapCreator.Data.Models;
 using UnityEngine;
+using CreatorMap.Scripts.Core.Grid;
+using CreatorMap.Scripts.Data;
 
 namespace CreatorMap.Scripts.Data
 {
@@ -18,35 +19,22 @@ namespace CreatorMap.Scripts.Data
         public Dictionary<long, MapEntry> Maps { get; private set; } = new Dictionary<long, MapEntry>();
 
         /// <summary>
-        /// Add or update a map in the container
+        /// Updates a map in the container with data from the GridManager
         /// </summary>
-        public void UpdateMap(MapBasicInformation mapInfo)
+        public void UpdateMap(MapCreatorGridManager.GridData gridData)
         {
-            if (mapInfo == null) return;
-            
-            // Create or update map entry
-            if (!Maps.TryGetValue(mapInfo.id, out MapEntry entry))
+            if (!Maps.TryGetValue(gridData.id, out var entry))
             {
-                entry = new MapEntry();
-                Maps[mapInfo.id] = entry;
+                entry = new MapEntry { Id = gridData.id };
+                Maps[gridData.id] = entry;
             }
             
-            // Update map data
-            entry.Id = mapInfo.id;
-            entry.TopNeighbourId = mapInfo.topNeighbourId;
-            entry.BottomNeighbourId = mapInfo.bottomNeighbourId;
-            entry.LeftNeighbourId = mapInfo.leftNeighbourId;
-            entry.RightNeighbourId = mapInfo.rightNeighbourId;
-            
-            // Copy cell data
+            // Clear existing cells and update from grid data
             entry.Cells.Clear();
-            foreach (var pair in mapInfo.cells.dictionary)
+            foreach (var cell in gridData.cells)
             {
-                entry.Cells[pair.Key] = pair.Value;
+                entry.Cells[cell.cellId] = cell.flags;
             }
-            
-            // Copy sprite data
-            entry.SpriteData = mapInfo.SpriteData;
         }
 
         /// <summary>
@@ -69,10 +57,6 @@ namespace CreatorMap.Scripts.Data
                     
                     // Write basic map info
                     writer.Write(entry.Id);
-                    writer.Write(entry.TopNeighbourId);
-                    writer.Write(entry.BottomNeighbourId);
-                    writer.Write(entry.LeftNeighbourId);
-                    writer.Write(entry.RightNeighbourId);
                     
                     // Write cell data
                     writer.Write(entry.Cells.Count);
@@ -83,8 +67,8 @@ namespace CreatorMap.Scripts.Data
                     }
                     
                     // Write tile sprite data
-                    writer.Write(entry.SpriteData.Tiles.Count);
-                    foreach (var tile in entry.SpriteData.Tiles)
+                    writer.Write(entry.SpriteData.tiles.Count);
+                    foreach (var tile in entry.SpriteData.tiles)
                     {
                         writer.Write(tile.Id ?? string.Empty);
                         writer.Write(tile.Position.x);
@@ -99,8 +83,8 @@ namespace CreatorMap.Scripts.Data
                     }
                     
                     // Write fixture sprite data
-                    writer.Write(entry.SpriteData.Fixtures.Count);
-                    foreach (var fixture in entry.SpriteData.Fixtures)
+                    writer.Write(entry.SpriteData.fixtures.Count);
+                    foreach (var fixture in entry.SpriteData.fixtures)
                     {
                         writer.Write(fixture.Id ?? string.Empty);
                         writer.Write(fixture.Position.x);
@@ -144,10 +128,6 @@ namespace CreatorMap.Scripts.Data
                     
                     // Read basic map info
                     entry.Id = reader.ReadInt64();
-                    entry.TopNeighbourId = reader.ReadInt64();
-                    entry.BottomNeighbourId = reader.ReadInt64();
-                    entry.LeftNeighbourId = reader.ReadInt64();
-                    entry.RightNeighbourId = reader.ReadInt64();
                     
                     // Read cell count
                     var cellCount = reader.ReadInt32();
@@ -177,7 +157,7 @@ namespace CreatorMap.Scripts.Data
                         tile.Color.Blue = reader.ReadSingle();
                         tile.Color.Alpha = reader.ReadSingle();
                         
-                        entry.SpriteData.Tiles.Add(tile);
+                        entry.SpriteData.tiles.Add(tile);
                     }
                     
                     // Read fixture sprite data
@@ -199,7 +179,7 @@ namespace CreatorMap.Scripts.Data
                         fixture.Color.Blue = reader.ReadSingle();
                         fixture.Color.Alpha = reader.ReadSingle();
                         
-                        entry.SpriteData.Fixtures.Add(fixture);
+                        entry.SpriteData.fixtures.Add(fixture);
                     }
                     
                     // Add to container
@@ -215,32 +195,30 @@ namespace CreatorMap.Scripts.Data
         }
         
         /// <summary>
-        /// Convert a MapEntry to MapBasicInformation
+        /// Converts a map entry to GridData format
         /// </summary>
-        public MapBasicInformation ToMapBasicInformation(long mapId)
+        public MapCreatorGridManager.GridData ToGridData(long mapId)
         {
-            if (!Maps.TryGetValue(mapId, out MapEntry entry))
+            if (!Maps.TryGetValue(mapId, out var entry))
             {
-                return null;
+                Debug.LogWarning($"No map data found for ID {mapId}");
+                return new MapCreatorGridManager.GridData { id = (int)mapId };
             }
             
-            var mapInfo = new MapBasicInformation
+            var gridData = new MapCreatorGridManager.GridData
             {
-                id = entry.Id,
-                topNeighbourId = entry.TopNeighbourId,
-                bottomNeighbourId = entry.BottomNeighbourId,
-                leftNeighbourId = entry.LeftNeighbourId,
-                rightNeighbourId = entry.RightNeighbourId,
-                SpriteData = entry.SpriteData
+                id = (int)mapId,
+                cells = new List<MapCreatorGridManager.CellData>()
             };
             
-            // Copy cell data
-            foreach (var pair in entry.Cells)
+            // Copy cell data from entry to gridData
+            foreach (var cellPair in entry.Cells)
             {
-                mapInfo.cells.dictionary[pair.Key] = pair.Value;
+                gridData.cells.Add(new MapCreatorGridManager.CellData(cellPair.Key, cellPair.Value));
+                gridData.cellsDict[cellPair.Key] = cellPair.Value;
             }
             
-            return mapInfo;
+            return gridData;
         }
     }
 
@@ -251,11 +229,7 @@ namespace CreatorMap.Scripts.Data
     public class MapEntry
     {
         public long Id { get; set; }
-        public long TopNeighbourId { get; set; } = -1;
-        public long BottomNeighbourId { get; set; } = -1;
-        public long LeftNeighbourId { get; set; } = -1;
-        public long RightNeighbourId { get; set; } = -1;
-        public Dictionary<ushort, ushort> Cells { get; set; } = new Dictionary<ushort, ushort>();
+        public Dictionary<ushort, uint> Cells { get; set; } = new Dictionary<ushort, uint>();
         public MapSpriteData SpriteData { get; set; } = new MapSpriteData();
     }
 } 

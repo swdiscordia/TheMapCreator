@@ -1,4 +1,5 @@
 using UnityEngine;
+using CreatorMap.Scripts.Data;
 
 namespace CreatorMap.Scripts
 {
@@ -8,7 +9,7 @@ namespace CreatorMap.Scripts
     /// </summary>
     public class TileSprite : MonoBehaviour
     {
-        // Basic tile properties
+        // Basic tile properties - ces propriétés doivent correspondre exactement à celles du projet principal
         [Header("Tile Properties")]
         public string id;
         public string key;
@@ -16,7 +17,7 @@ namespace CreatorMap.Scripts
         public bool flipX;
         public bool flipY;
         
-        // Color properties
+        // Color properties - ces propriétés doivent correspondre exactement à celles du projet principal
         [Header("Color Properties")]
         public float colorMultiplicatorR = 1.0f;
         public float colorMultiplicatorG = 1.0f;
@@ -44,6 +45,9 @@ namespace CreatorMap.Scripts
             Debug.Log($"[TileSprite] {id} initialized. Type: {type}, ColorMultiplicatorIsOne: {colorMultiplicatorIsOne}");
         }
 
+        /// <summary>
+        /// Updates the color multiplicator values and applies them to the material
+        /// </summary>
         public void UpdateColors(float r, float g, float b, float a = 1.0f, bool isOne = false)
         {
             colorMultiplicatorR = r;
@@ -80,6 +84,63 @@ namespace CreatorMap.Scripts
                     
                     spriteRenderer.sharedMaterial.SetColor(ColorProperty, color);
                 }
+            }
+        }
+        
+        /// <summary>
+        /// Convertit les données du TileSprite en TileSpriteData pour la sérialisation
+        /// </summary>
+        public TileSpriteData ToTileSpriteData()
+        {
+            var data = new TileSpriteData
+            {
+                Id = id,
+                Position = transform.position,
+                Scale = transform.localScale.x,
+                Order = GetComponent<SpriteRenderer>()?.sortingOrder ?? 0,
+                FlipX = flipX,
+                FlipY = flipY,
+                IsFixture = type == 1,
+                Color = new TileColorData
+                {
+                    Red = colorMultiplicatorR,
+                    Green = colorMultiplicatorG,
+                    Blue = colorMultiplicatorB,
+                    Alpha = colorMultiplicatorA
+                }
+            };
+            
+            return data;
+        }
+        
+        /// <summary>
+        /// Applique les données d'un TileSpriteData à ce TileSprite
+        /// </summary>
+        public void ApplyTileSpriteData(TileSpriteData data)
+        {
+            if (data == null) return;
+            
+            id = data.Id;
+            type = data.IsFixture ? (byte)1 : (byte)0;
+            transform.position = data.Position;
+            transform.localScale = new Vector3(data.Scale, data.Scale, 1f);
+            flipX = data.FlipX;
+            flipY = data.FlipY;
+            
+            // Apply color
+            colorMultiplicatorR = data.Color.Red;
+            colorMultiplicatorG = data.Color.Green;
+            colorMultiplicatorB = data.Color.Blue;
+            colorMultiplicatorA = data.Color.Alpha;
+            colorMultiplicatorIsOne = data.Color.IsOne;
+            
+            // Apply to sprite renderer
+            var spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.flipX = flipX;
+                spriteRenderer.flipY = flipY;
+                spriteRenderer.sortingOrder = data.Order;
             }
         }
     }

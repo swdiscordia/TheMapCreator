@@ -16,6 +16,8 @@ namespace Managers.Cameras
         
         // Hard-coded camera X position to ensure consistency
         private const float FixedCameraX = 6.2f;
+        private const float FixedCameraY = 2.7f;
+        private const float FixedCameraZ = -10f;
 
         // Start is called before the first frame update
         private GameObject _grid;     // The grid object
@@ -32,9 +34,8 @@ namespace Managers.Cameras
                 {
                     AdjustCamera();
                     AdjustZoom();
-                    // Force X position after adjustments
-                    var pos = transform.position;
-                    transform.position = new Vector3(FixedCameraX, pos.y, pos.z);
+                    // Force position to fixed coordinates
+                    transform.position = new Vector3(FixedCameraX, FixedCameraY, FixedCameraZ);
                 }
                 
                 await UniTask.Yield();
@@ -44,15 +45,8 @@ namespace Managers.Cameras
         // Adjust the camera's position and zoom level based on the grid size
         public void AdjustCamera()
         {
-            // Get the grid's dimensions
-            const float gridHeight = MaxHeight + CellHeight - 3.5f;
-
-            // Calculate the center of the grid
-            var position = _grid.transform.position;
-            var centerY = position.y + gridHeight / 2f;
-
-            // Set the camera's position with fixed X
-            transform.position = new Vector3(FixedCameraX, centerY - (CellHeight * 1.5f), transform.position.z);
+            // Set the camera's position to fixed coordinates
+            transform.position = new Vector3(FixedCameraX, FixedCameraY, FixedCameraZ);
         }
 
         private void AdjustZoom()
@@ -95,11 +89,13 @@ namespace Managers.Cameras
             _lastScreenHeight = Screen.height;
             AdjustZoom();
             
-            // Always maintain the X position
+            // Always maintain the fixed position
             var pos = transform.position;
-            if (Mathf.Abs(pos.x - FixedCameraX) > 0.01f)
+            if (Mathf.Abs(pos.x - FixedCameraX) > 0.01f || 
+                Mathf.Abs(pos.y - FixedCameraY) > 0.01f || 
+                Mathf.Abs(pos.z - FixedCameraZ) > 0.01f)
             {
-                transform.position = new Vector3(FixedCameraX, pos.y, pos.z);
+                transform.position = new Vector3(FixedCameraX, FixedCameraY, FixedCameraZ);
             }
         }
     }

@@ -2,11 +2,10 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using CreatorMap.Scripts.Data;
-using Managers.Maps.MapCreator;
-using MapCreator.Data.Models;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Threading.Tasks;
+using CreatorMap.Scripts.Core.Grid;
 
 namespace CreatorMap.Scripts
 {
@@ -17,8 +16,8 @@ namespace CreatorMap.Scripts
     /// </summary>
     public class LoadMapAdapter : MonoBehaviour
     {
-        // Reference to our map component
-        private MapComponent mapComponent;
+        // Reference to our grid manager
+        private MapCreatorGridManager gridManager;
         
         // Reference to shader property IDs for better performance
         private static readonly int ColorProperty = Shader.PropertyToID("_Color");
@@ -32,7 +31,7 @@ namespace CreatorMap.Scripts
         
         private void Awake()
         {
-            mapComponent = GetComponent<MapComponent>();
+            gridManager = GetComponent<MapCreatorGridManager>();
         }
 
         private void OnDestroy()
@@ -55,10 +54,9 @@ namespace CreatorMap.Scripts
         /// </summary>
         public void PrepareMapForLoading()
         {
-            if (mapComponent == null || mapComponent.mapInformation == null || 
-                mapComponent.mapInformation.SpriteData == null)
+            if (gridManager == null || gridManager.gridData == null)
             {
-                Debug.LogWarning("Cannot prepare map for loading: Map component, map information, or sprite data is null");
+                Debug.LogWarning("Cannot prepare map for loading: Grid manager or grid data is null");
                 return;
             }
                 
@@ -74,49 +72,15 @@ namespace CreatorMap.Scripts
             // Make sure TileSprite components have the correct properties
             foreach (var tile in allTiles)
             {
-                // Find matching tile data
-                var tileData = mapComponent.mapInformation.SpriteData.Tiles.FirstOrDefault(t => 
-                    t.Id == tile.id && 
-                    Mathf.Approximately(t.Position.x, tile.transform.position.x) && 
-                    Mathf.Approximately(t.Position.y, tile.transform.position.y));
-                    
-                if (tileData != null)
-                {
-                    // Update TileSprite component with the correct properties
-                    tile.id = tileData.Id;
-                    tile.key = GetTileAddressablePath(tileData.Id, tileData.IsFixture);
-                    tile.type = (byte)(tileData.IsFixture ? 1 : 0);
-                    
-                    // Set flipping properties
-                    var renderer = tile.GetComponent<SpriteRenderer>();
-                    if (renderer != null)
-                    {
-                        renderer.flipX = tileData.FlipX;
-                        renderer.flipY = tileData.FlipY;
-                        tile.flipX = tileData.FlipX;
-                        tile.flipY = tileData.FlipY;
-                    }
-                    
-                    // Set color multiplier
-                    tile.colorMultiplicatorIsOne = tileData.Color.IsOne;
-                    
-                    if (tileData.Color.IsOne)
-                    {
-                        // Use default values from main project (256, 256, 256, 0)
-                        tile.colorMultiplicatorR = 256f;
-                        tile.colorMultiplicatorG = 256f;
-                        tile.colorMultiplicatorB = 256f;
-                        tile.colorMultiplicatorA = 0f;
-                    }
-                    else
-                    {
-                        // Use custom color values
-                        tile.colorMultiplicatorR = tileData.Color.Red;
-                        tile.colorMultiplicatorG = tileData.Color.Green;
-                        tile.colorMultiplicatorB = tileData.Color.Blue;
-                        tile.colorMultiplicatorA = tileData.Color.Alpha;
-                    }
-                }
+                // Get the tile sprite data from TileSpriteManager or another source
+                // We need to implement a way to store and retrieve tile sprite data
+                // without relying on MapComponent
+                
+                // For now, just use the existing tile properties
+                if (string.IsNullOrEmpty(tile.id)) continue;
+                
+                // Update any tile properties if needed
+                tile.key = GetTileAddressablePath(tile.id, tile.type == 1);
             }
             
             // Apply the shader to all tiles (async)
@@ -134,9 +98,8 @@ namespace CreatorMap.Scripts
             // Get the first two digits for the subfolder (or just use the first digit if only one digit)
             string subfolder = numericId.Length >= 2 ? numericId.Substring(0, 2) : numericId;
             
-            // Format the full path according to pattern
-            string prefix = isFixture ? "Fixture Assets" : "Tiles Assets";
-            return $"{prefix}/Tiles/{subfolder}/{numericId}.png";
+            // Format the full path according to the format utilisé dans le projet principal
+            return $"Assets/Tiles/{subfolder}/{numericId}.png";
         }
 
         /// <summary>

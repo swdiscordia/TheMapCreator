@@ -20,7 +20,8 @@ namespace CreatorMap.Scripts
         
         public TileSpriteModel()
         {
-            ColorMultiplicator = new ColorMultiplicator();
+            // Initialiser avec la valeur par défaut (255, 255, 255) correspondant à un blanc pur
+            ColorMultiplicator = new ColorMultiplicator(255, 255, 255);
         }
     }
 } 
