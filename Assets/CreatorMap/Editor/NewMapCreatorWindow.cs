@@ -21,13 +21,14 @@ using TileColorData = CreatorMap.Scripts.Data.TileColorData;
 // Add explicit references to avoid ambiguity for types used in map creation
 using MapCreatorGridData = CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.GridData;
 using MapCreatorCellData = CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData;
+using Managers.Scene;
 
 namespace MapCreator.Editor
 {
     public class NewMapCreatorWindow : EditorWindow
     {
         private int m_SelectedTab = 0;
-        private readonly string[] m_Tabs = { "Map Settings", "Draw Mode" };
+        private readonly string[] m_Tabs = { "Map Settings", "Draw Mode", "World Navigation" };
 
         // Scroll position for draw mode
         private Vector2 m_DrawModeScrollPosition;
@@ -109,6 +110,28 @@ namespace MapCreator.Editor
         private Dictionary<string, Texture2D> m_TilePreviews = new Dictionary<string, Texture2D>();
         private Texture2D m_DefaultTileTexture;
         
+        // Variables pour le World Navigation (ajoutées)
+        private Vector2 m_WorldNavScrollPosition;
+        private MapComponent m_CurrentMapComponent;
+        private bool m_ShowWorldNavHelp = true;
+        private long m_NorthMapId = -1;
+        private long m_EastMapId = -1;
+        private long m_SouthMapId = -1;
+        private long m_WestMapId = -1;
+        private string m_NewMapIdInput = "";
+        private WorldMapManager.Direction m_SelectedDirection = WorldMapManager.Direction.North;
+        private GUIStyle m_HeaderStyle;
+        private GUIStyle m_LabelStyle;
+        private GUIStyle m_BoxStyle;
+        private GUIStyle m_ButtonStyle;
+        private GUIStyle m_HelpBoxStyle;
+        private Dictionary<long, bool> m_ExistingMaps = new Dictionary<long, bool>();
+        
+        // Texture de terrain par défaut
+        private TileSpriteData m_DefaultGroundTile = null;
+        private bool m_UseDefaultGroundTile = false;
+        private Vector2 m_DefaultTileScrollPosition;
+
         // Static constructor to initialize static fields
         static NewMapCreatorWindow()
         {
@@ -156,6 +179,9 @@ namespace MapCreator.Editor
             {
                 Debug.LogWarning("Eraser icon not found at Assets/CreatorMap/Editor/Icons/eraser_10946685.png");
             }
+            
+            // Initialize World Navigation
+            RefreshMapNavigation();
         }
 
         private void OnDisable()
@@ -269,13 +295,17 @@ namespace MapCreator.Editor
                 EditorGUILayout.Space();
 
                 // Tab content
-                if (m_SelectedTab == 0)
+                switch (m_SelectedTab)
                 {
-                    DrawMapSettingsTabSafe();
-                }
-                else
-                {
-                    DrawDrawModeTabSafe();
+                    case 0: // Map Settings
+                        DrawMapSettingsTabSafe();
+                        break;
+                    case 1: // Draw Mode
+                        DrawDrawModeTabSafe();
+                        break;
+                    case 2: // World Navigation (new)
+                        DrawWorldNavigationTabSafe();
+                        break;
                 }
             }
             finally
@@ -333,13 +363,20 @@ namespace MapCreator.Editor
             {
                 EditorGUILayout.LabelField("Create New Map", EditorStyles.boldLabel);
                 
+                if (m_UseDefaultGroundTile && m_DefaultGroundTile == null)
+                {
+                    EditorGUILayout.HelpBox("Please select a default ground tile before creating the map.", MessageType.Warning);
+                    GUI.enabled = false;
+                }
+                
                 if (GUILayout.Button("Create Map", GUILayout.Height(40)))
                 {
                     if (IsValidMapSize())
                     {
                         m_ShouldCreateMap = true;
                         Debug.Log("Creating new map with settings: " + 
-                            (m_ShowDefaultValues ? "Default size" : $"Size: {m_MapWidth}x{m_MapHeight}"));
+                            (m_ShowDefaultValues ? "Default size" : $"Size: {m_MapWidth}x{m_MapHeight}") +
+                            (m_UseDefaultGroundTile ? $" with default ground tile ID: {m_DefaultGroundTile.Id}" : ""));
                         
                         CreateNewMap();
                     }
@@ -350,6 +387,8 @@ namespace MapCreator.Editor
                             "Please enter valid map size values within the allowed range.", "OK");
                     }
                 }
+                
+                GUI.enabled = true;
             }
             finally
             {
@@ -934,6 +973,81 @@ namespace MapCreator.Editor
                 UnityEditor.EditorUtility.SetDirty(mapComponent);
                 UnityEditor.EditorUtility.SetDirty(mapObject);
                 
+                // Si une tuile de terrain par défaut est sélectionnée, l'appliquer à toutes les cellules
+                if (m_UseDefaultGroundTile && m_DefaultGroundTile != null)
+                {
+                    Debug.Log($"Applying default ground tile ID:{m_DefaultGroundTile.Id} to all cells");
+                    
+                    // Ajouter le TileSpriteManager directement à l'objet Map
+                    var tileSpriteManager = mapObject.GetComponent<CreatorMap.Scripts.TileSpriteManager>();
+                    if (tileSpriteManager == null)
+                    {
+                        tileSpriteManager = mapObject.AddComponent<CreatorMap.Scripts.TileSpriteManager>();
+                    }
+                    
+                    // Vérifier si la map a un SpriteData initialisé
+                    if (mapComponent.mapInformation.SpriteData == null)
+                    {
+                        mapComponent.mapInformation.SpriteData = new CreatorMap.Scripts.Data.MapSpriteData();
+                    }
+                    
+                    // Obtenir le chemin de la tile pour le chargement
+                    string tilePath = GetAddressablePath(m_DefaultGroundTile);
+                    
+                    // Pour chaque cellule de la grille, créer une instance de la tile de terrain
+                    for (int cellId = 0; cellId < 560; cellId++)
+                    {
+                        // Obtenir la position de la cellule dans l'espace de la scène
+                        var point = Managers.Scene.SceneConverter.GetSceneCoordByCellId(cellId);
+                        if (point == null) continue;
+                        
+                        // Randomiser le flip horizontal pour plus de variété visuelle
+                        bool randomFlipX = UnityEngine.Random.value > 0.5f;
+                        
+                        // Créer une nouvelle instance de données de tile
+                        var tileData = new CreatorMap.Scripts.Data.TileSpriteData
+                        {
+                            Id = m_DefaultGroundTile.Id,
+                            Position = new Vector2(point.X, point.Y),
+                            Scale = m_DefaultGroundTile.Scale,
+                            Order = 0, // Ground tiles sont au niveau le plus bas (0)
+                            FlipX = randomFlipX, // Utiliser la valeur randomisée
+                            FlipY = m_DefaultGroundTile.FlipY,
+                            Color = new CreatorMap.Scripts.Data.TileColorData 
+                            { 
+                                Red = 1f, 
+                                Green = 1f, 
+                                Blue = 1f, 
+                                Alpha = 1f 
+                            }
+                        };
+                        
+                        // Générer un ID unique pour la tile
+                        string uniqueTileId = $"tile_{m_DefaultGroundTile.Id}_{cellId}";
+                        
+                        // Créer la tile dans la scène
+                        var tileSprite = tileSpriteManager.CreateTileSprite(
+                            uniqueTileId,
+                            tilePath,
+                            0, // Type 0 = ground
+                            new Vector3(point.X, point.Y, 0),
+                            tileData.FlipX,
+                            tileData.FlipY,
+                            tileData.Color.Red,
+                            tileData.Color.Green,
+                            tileData.Color.Blue,
+                            tileData.Color.Alpha,
+                            tileData.Order
+                        );
+                        
+                        // Ajouter la tile aux données de la map
+                        mapComponent.mapInformation.SpriteData.tiles.Add(tileData);
+                    }
+                    
+                    // Marquer le composant comme sale pour enregistrer les modifications
+                    EditorUtility.SetDirty(mapComponent);
+                }
+                
                 // Log creation with subfolder information
                 Debug.Log($"Scene '{sceneObjectName}' with Map '{mapObjectName}' (ID: {mapId}) created in folder {folderIndex} with size {width}x{height}.");
                 
@@ -1190,6 +1304,946 @@ namespace MapCreator.Editor
         public bool IsEraserMode()
         {
             return m_EraserMode;
+        }
+
+        // Nouvelle méthode pour l'onglet World Navigation
+        private void DrawWorldNavigationTabSafe()
+        {
+            try
+            {
+                DrawWorldNavigationTab();
+            }
+            catch (Exception e)
+            {
+                EditorGUILayout.HelpBox($"Error in World Navigation tab: {e.Message}", MessageType.Error);
+                Debug.LogError($"Error in World Navigation tab: {e.Message}\n{e.StackTrace}");
+            }
+        }
+        
+        private void DrawWorldNavigationTab()
+        {
+            InitializeWorldNavStyles();
+            
+            EditorGUILayout.BeginVertical();
+            m_WorldNavScrollPosition = EditorGUILayout.BeginScrollView(m_WorldNavScrollPosition);
+            
+            GUILayout.Space(10);
+            EditorGUILayout.LabelField("World Map Navigator", m_HeaderStyle);
+            GUILayout.Space(10);
+            
+            if (m_ShowWorldNavHelp)
+            {
+                EditorGUILayout.BeginVertical(m_HelpBoxStyle);
+                EditorGUILayout.LabelField("Ce module permet de gérer et naviguer entre les maps adjacentes.", m_LabelStyle);
+                EditorGUILayout.LabelField("1. Utilisez la section 'Map actuelle' pour visualiser et éditer les ID des maps voisines.", m_LabelStyle);
+                EditorGUILayout.LabelField("2. Vous pouvez créer une nouvelle map adjacente ou charger une map existante.", m_LabelStyle);
+                EditorGUILayout.LabelField("3. La navigation entre les maps est possible via les boutons directionnels.", m_LabelStyle);
+                
+                GUILayout.Space(5);
+                if (GUILayout.Button("Masquer l'aide", m_ButtonStyle))
+                {
+                    m_ShowWorldNavHelp = false;
+                }
+                EditorGUILayout.EndVertical();
+                GUILayout.Space(10);
+            }
+            else
+            {
+                if (GUILayout.Button("Afficher l'aide", m_ButtonStyle))
+                {
+                    m_ShowWorldNavHelp = true;
+                }
+                GUILayout.Space(10);
+            }
+            
+            if (m_CurrentMapComponent == null)
+            {
+                EditorGUILayout.HelpBox("Aucun MapComponent trouvé dans la scène active!", MessageType.Warning);
+                if (GUILayout.Button("Rafraîchir", m_ButtonStyle))
+                {
+                    RefreshMapNavigation();
+                }
+                EditorGUILayout.EndScrollView();
+                EditorGUILayout.EndVertical();
+                return;
+            }
+            
+            // Nouvelle disposition avec flèches à gauche et informations à droite
+            EditorGUILayout.BeginVertical(m_BoxStyle);
+            EditorGUILayout.LabelField("Map actuelle", m_HeaderStyle);
+            GUILayout.Space(5);
+            
+            EditorGUILayout.BeginHorizontal();
+            
+            // SECTION GAUCHE: Flèches de navigation
+            EditorGUILayout.BeginVertical(GUILayout.Width(150));
+            
+            // Nord
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("↑", m_ButtonStyle, GUILayout.Width(40), GUILayout.Height(40)))
+            {
+                NavigateToMap(m_NorthMapId);
+            }
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+            
+            // Ouest, Centre, Est
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("←", m_ButtonStyle, GUILayout.Width(40), GUILayout.Height(40)))
+            {
+                NavigateToMap(m_WestMapId);
+            }
+            
+            if (GUILayout.Button("⊙", m_ButtonStyle, GUILayout.Width(40), GUILayout.Height(40)))
+            {
+                // Copier l'ID de la map actuelle dans le champ de texte
+                if (m_CurrentMapComponent != null && m_CurrentMapComponent.mapInformation != null)
+                {
+                    m_NewMapIdInput = m_CurrentMapComponent.mapInformation.id.ToString();
+                    GUI.FocusControl(null); // Enlever le focus du champ actuel
+                }
+            }
+            
+            if (GUILayout.Button("→", m_ButtonStyle, GUILayout.Width(40), GUILayout.Height(40)))
+            {
+                NavigateToMap(m_EastMapId);
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            // Sud
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("↓", m_ButtonStyle, GUILayout.Width(40), GUILayout.Height(40)))
+            {
+                NavigateToMap(m_SouthMapId);
+            }
+            GUILayout.FlexibleSpace();
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+            
+            // Séparateur vertical
+            EditorGUILayout.Space(10);
+            
+            // SECTION DROITE: Informations de la map et champs d'édition
+            EditorGUILayout.BeginVertical();
+            
+            EditorGUILayout.LabelField($"ID: {m_CurrentMapComponent.mapInformation.id}", m_LabelStyle);
+            EditorGUILayout.Space(5);
+            
+            // Nord
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Nord:", GUILayout.Width(50));
+            EditorGUI.BeginChangeCheck();
+            m_NorthMapId = EditorGUILayout.LongField(m_NorthMapId);
+            if (EditorGUI.EndChangeCheck())
+            {
+                // Sauvegarder l'ancienne valeur pour vérifier si elle a changé
+                long oldId = m_CurrentMapComponent.mapInformation.topNeighbourId;
+                
+                // Mettre à jour la référence locale
+                m_CurrentMapComponent.mapInformation.topNeighbourId = m_NorthMapId;
+                EditorUtility.SetDirty(m_CurrentMapComponent);
+                CheckMapExists(m_NorthMapId);
+                
+                // Mettre à jour la référence de la map voisine si la valeur a changé
+                if (oldId != m_NorthMapId && m_NorthMapId > 0)
+                {
+                    UpdateNeighborMapReference(m_NorthMapId, WorldMapManager.Direction.North);
+                }
+            }
+            DrawMapExistenceIndicator(m_NorthMapId);
+            EditorGUILayout.EndHorizontal();
+            
+            // Est
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Est:", GUILayout.Width(50));
+            EditorGUI.BeginChangeCheck();
+            m_EastMapId = EditorGUILayout.LongField(m_EastMapId);
+            if (EditorGUI.EndChangeCheck())
+            {
+                // Sauvegarder l'ancienne valeur pour vérifier si elle a changé
+                long oldId = m_CurrentMapComponent.mapInformation.rightNeighbourId;
+                
+                // Mettre à jour la référence locale
+                m_CurrentMapComponent.mapInformation.rightNeighbourId = m_EastMapId;
+                EditorUtility.SetDirty(m_CurrentMapComponent);
+                CheckMapExists(m_EastMapId);
+                
+                // Mettre à jour la référence de la map voisine si la valeur a changé
+                if (oldId != m_EastMapId && m_EastMapId > 0)
+                {
+                    UpdateNeighborMapReference(m_EastMapId, WorldMapManager.Direction.East);
+                }
+            }
+            DrawMapExistenceIndicator(m_EastMapId);
+            EditorGUILayout.EndHorizontal();
+            
+            // Sud
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Sud:", GUILayout.Width(50));
+            EditorGUI.BeginChangeCheck();
+            m_SouthMapId = EditorGUILayout.LongField(m_SouthMapId);
+            if (EditorGUI.EndChangeCheck())
+            {
+                // Sauvegarder l'ancienne valeur pour vérifier si elle a changé
+                long oldId = m_CurrentMapComponent.mapInformation.bottomNeighbourId;
+                
+                // Mettre à jour la référence locale
+                m_CurrentMapComponent.mapInformation.bottomNeighbourId = m_SouthMapId;
+                EditorUtility.SetDirty(m_CurrentMapComponent);
+                CheckMapExists(m_SouthMapId);
+                
+                // Mettre à jour la référence de la map voisine si la valeur a changé
+                if (oldId != m_SouthMapId && m_SouthMapId > 0)
+                {
+                    UpdateNeighborMapReference(m_SouthMapId, WorldMapManager.Direction.South);
+                }
+            }
+            DrawMapExistenceIndicator(m_SouthMapId);
+            EditorGUILayout.EndHorizontal();
+            
+            // Ouest
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Ouest:", GUILayout.Width(50));
+            EditorGUI.BeginChangeCheck();
+            m_WestMapId = EditorGUILayout.LongField(m_WestMapId);
+            if (EditorGUI.EndChangeCheck())
+            {
+                // Sauvegarder l'ancienne valeur pour vérifier si elle a changé
+                long oldId = m_CurrentMapComponent.mapInformation.leftNeighbourId;
+                
+                // Mettre à jour la référence locale
+                m_CurrentMapComponent.mapInformation.leftNeighbourId = m_WestMapId;
+                EditorUtility.SetDirty(m_CurrentMapComponent);
+                CheckMapExists(m_WestMapId);
+                
+                // Mettre à jour la référence de la map voisine si la valeur a changé
+                if (oldId != m_WestMapId && m_WestMapId > 0)
+                {
+                    UpdateNeighborMapReference(m_WestMapId, WorldMapManager.Direction.West);
+                }
+            }
+            DrawMapExistenceIndicator(m_WestMapId);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+            
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+            
+            GUILayout.Space(20);
+            
+            // NOUVELLE SECTION DÉPLACÉE: Default ground tile box
+            EditorGUILayout.BeginVertical(m_BoxStyle);
+            try
+            {
+                EditorGUILayout.LabelField("Default Ground Tile", m_HeaderStyle);
+                EditorGUILayout.Space();
+                
+                m_UseDefaultGroundTile = EditorGUILayout.ToggleLeft("Use Default Ground Tile", m_UseDefaultGroundTile);
+                
+                if (m_UseDefaultGroundTile)
+                {
+                    EditorGUILayout.Space(5);
+                    
+                    if (m_AvailableTiles.Count == 0)
+                    {
+                        EditorGUILayout.HelpBox("No tiles available. Make sure you have sprite files in Assets/CreatorMap/Content/Tiles", MessageType.Warning);
+                        
+                        if (GUILayout.Button("Refresh Tiles"))
+                        {
+                            LoadAvailableTiles();
+                        }
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("Select Default Ground Tile:", EditorStyles.boldLabel);
+                        
+                        // Display a grid of available tiles for selection
+                        m_DefaultTileScrollPosition = EditorGUILayout.BeginScrollView(m_DefaultTileScrollPosition, GUILayout.Height(150));
+                        
+                        int columns = 4;
+                        int i = 0;
+                        
+                        EditorGUILayout.BeginHorizontal();
+                        
+                        foreach (var tile in m_AvailableTiles)
+                        {
+                            if (i > 0 && i % columns == 0)
+                            {
+                                EditorGUILayout.EndHorizontal();
+                                EditorGUILayout.BeginHorizontal();
+                            }
+                            
+                            // Get or create tile preview
+                            Texture2D preview = GetTilePreview(tile);
+                            
+                            // Display tile button
+                            if (GUILayout.Button(new GUIContent(preview, tile.Id), GUILayout.Width(64), GUILayout.Height(64)))
+                            {
+                                m_DefaultGroundTile = tile;
+                            }
+                            
+                            // Highlight selected tile
+                            if (m_DefaultGroundTile != null && m_DefaultGroundTile.Id == tile.Id)
+                            {
+                                Rect lastRect = GUILayoutUtility.GetLastRect();
+                                EditorGUI.DrawRect(lastRect, new Color(0, 1, 0, 0.3f));
+                            }
+                            
+                            i++;
+                        }
+                        
+                        // Complete the horizontal group
+                        if (i % columns != 0)
+                        {
+                            for (int j = 0; j < columns - (i % columns); j++)
+                            {
+                                GUILayout.Space(64);
+                            }
+                        }
+                        
+                        EditorGUILayout.EndHorizontal();
+                        EditorGUILayout.EndScrollView();
+                        
+                        // Display selected tile info
+                        if (m_DefaultGroundTile != null)
+                        {
+                            EditorGUILayout.BeginHorizontal();
+                            GUILayout.Label("Selected Tile ID:", GUILayout.Width(120));
+                            GUILayout.Label(m_DefaultGroundTile.Id);
+                            EditorGUILayout.EndHorizontal();
+                            
+                            string path = GetAddressablePath(m_DefaultGroundTile);
+                            EditorGUILayout.BeginHorizontal();
+                            GUILayout.Label("Path:", GUILayout.Width(120));
+                            EditorGUILayout.SelectableLabel(path, EditorStyles.textField, GUILayout.Height(EditorGUIUtility.singleLineHeight));
+                            EditorGUILayout.EndHorizontal();
+                        }
+                        else
+                        {
+                            EditorGUILayout.HelpBox("Please select a default ground tile from the grid above.", MessageType.Info);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                EditorGUILayout.EndVertical();
+            }
+            
+            GUILayout.Space(20);
+            
+            // Création de map - Utilise le même style que dans Map Settings
+            EditorGUILayout.BeginVertical(m_BoxStyle);
+            EditorGUILayout.LabelField("Créer une nouvelle map adjacente", m_HeaderStyle);
+            GUILayout.Space(5);
+            
+            m_SelectedDirection = (WorldMapManager.Direction)EditorGUILayout.EnumPopup("Direction:", m_SelectedDirection);
+            
+            // Ajouter la même vérification que dans Map Settings
+            if (m_UseDefaultGroundTile && m_DefaultGroundTile == null)
+            {
+                EditorGUILayout.HelpBox("Please select a default ground tile before creating the map.", MessageType.Warning);
+                GUI.enabled = false;
+            }
+            
+            // Utiliser un style similaire au bouton dans Map Settings
+            GUI.backgroundColor = new Color(0.6f, 1f, 0.6f); // Légère teinte verte
+            if (GUILayout.Button("Créer une map", GUILayout.Height(40)))
+            {
+                CreateAdjacentMapWorld(m_SelectedDirection);
+            }
+            GUI.backgroundColor = Color.white; // Réinitialiser la couleur
+            GUI.enabled = true;
+            
+            EditorGUILayout.EndVertical();
+            
+            GUILayout.Space(20);
+            
+            // Chargement de map
+            EditorGUILayout.BeginVertical(m_BoxStyle);
+            EditorGUILayout.LabelField("Charger une map existante", m_HeaderStyle);
+            GUILayout.Space(5);
+            
+            EditorGUILayout.BeginHorizontal();
+            m_NewMapIdInput = EditorGUILayout.TextField("ID de map:", m_NewMapIdInput);
+            
+            if (GUILayout.Button("Charger", m_ButtonStyle, GUILayout.Width(80)))
+            {
+                if (long.TryParse(m_NewMapIdInput, out long mapId))
+                {
+                    LoadMapWorld(mapId);
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("Erreur", "L'ID de map doit être un nombre entier.", "OK");
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.EndVertical();
+            
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
+        }
+        
+        private void InitializeWorldNavStyles()
+        {
+            if (m_HeaderStyle == null)
+            {
+                m_HeaderStyle = new GUIStyle(EditorStyles.boldLabel);
+                m_HeaderStyle.fontSize = 14;
+                m_HeaderStyle.alignment = TextAnchor.MiddleCenter;
+                m_HeaderStyle.normal.textColor = EditorGUIUtility.isProSkin ? Color.white : Color.black;
+            }
+            
+            if (m_LabelStyle == null)
+            {
+                m_LabelStyle = new GUIStyle(EditorStyles.label);
+                m_LabelStyle.fontSize = 12;
+                m_LabelStyle.wordWrap = true;
+            }
+            
+            if (m_BoxStyle == null)
+            {
+                m_BoxStyle = new GUIStyle(GUI.skin.box);
+                m_BoxStyle.padding = new RectOffset(10, 10, 10, 10);
+                m_BoxStyle.margin = new RectOffset(5, 5, 5, 5);
+            }
+            
+            if (m_ButtonStyle == null)
+            {
+                m_ButtonStyle = new GUIStyle(GUI.skin.button);
+                m_ButtonStyle.padding = new RectOffset(10, 10, 5, 5);
+                m_ButtonStyle.margin = new RectOffset(5, 5, 2, 2);
+            }
+            
+            if (m_HelpBoxStyle == null)
+            {
+                m_HelpBoxStyle = new GUIStyle(EditorStyles.helpBox);
+                m_HelpBoxStyle.padding = new RectOffset(10, 10, 10, 10);
+                m_HelpBoxStyle.margin = new RectOffset(5, 5, 5, 5);
+                m_HelpBoxStyle.wordWrap = true;
+            }
+        }
+        
+        // Méthode pour rafraîchir la navigation des maps
+        private void RefreshMapNavigation()
+        {
+            // Trouver le MapComponent dans la scène active
+            m_CurrentMapComponent = FindObjectOfType<MapComponent>();
+            
+            if (m_CurrentMapComponent != null && m_CurrentMapComponent.mapInformation != null)
+            {
+                m_NorthMapId = m_CurrentMapComponent.mapInformation.topNeighbourId;
+                m_EastMapId = m_CurrentMapComponent.mapInformation.rightNeighbourId;
+                m_SouthMapId = m_CurrentMapComponent.mapInformation.bottomNeighbourId;
+                m_WestMapId = m_CurrentMapComponent.mapInformation.leftNeighbourId;
+                
+                // Vérifier si les maps adjacentes existent
+                CheckMapExists(m_NorthMapId);
+                CheckMapExists(m_EastMapId);
+                CheckMapExists(m_SouthMapId);
+                CheckMapExists(m_WestMapId);
+            }
+            
+            Repaint();
+        }
+        
+        private void CheckMapExists(long mapId)
+        {
+            if (mapId <= 0)
+                return;
+                
+            if (m_ExistingMaps.ContainsKey(mapId))
+                return;
+                
+            string mapPath = $"Assets/CreatorMap/Maps/{mapId % 10}/{mapId}.unity";
+            bool exists = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(mapPath) != null;
+            m_ExistingMaps[mapId] = exists;
+        }
+        
+        private void DrawMapExistenceIndicator(long mapId)
+        {
+            if (mapId <= 0)
+                return;
+                
+            bool exists = false;
+            if (m_ExistingMaps.TryGetValue(mapId, out bool cachedExists))
+            {
+                exists = cachedExists;
+            }
+            else
+            {
+                CheckMapExists(mapId);
+                exists = m_ExistingMaps.TryGetValue(mapId, out cachedExists) && cachedExists;
+            }
+            
+            // Changement pour une version plus compacte de l'indicateur
+            if (exists)
+            {
+                EditorGUILayout.LabelField("✓", new GUIStyle(EditorStyles.label) { 
+                    normal = { textColor = Color.green },
+                    fixedWidth = 20
+                });
+            }
+            else
+            {
+                EditorGUILayout.LabelField("✗", new GUIStyle(EditorStyles.label) { 
+                    normal = { textColor = Color.red },
+                    fixedWidth = 20
+                });
+            }
+        }
+        
+        private void NavigateToMap(long mapId)
+        {
+            if (mapId <= 0)
+            {
+                EditorUtility.DisplayDialog("Erreur", "Aucune map adjacente définie dans cette direction.", "OK");
+                return;
+            }
+            
+            string mapPath = $"Assets/CreatorMap/Maps/{mapId % 10}/{mapId}.unity";
+            
+            if (!m_ExistingMaps.TryGetValue(mapId, out bool exists) || !exists)
+            {
+                bool createMap = EditorUtility.DisplayDialog(
+                    "Map introuvable", 
+                    $"La map #{mapId} n'existe pas. Voulez-vous la créer?", 
+                    "Oui", "Non");
+                    
+                if (createMap)
+                {
+                    // Créer la map dans la direction appropriée
+                    WorldMapManager.Direction direction = GetDirectionFromCurrentMap(mapId);
+                    CreateAdjacentMapWorld(direction);
+                }
+                
+                return;
+            }
+            
+            // Sauvegarder les modifications avant de changer de scène
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                EditorSceneManager.OpenScene(mapPath, OpenSceneMode.Single);
+                RefreshMapNavigation();
+            }
+        }
+        
+        private WorldMapManager.Direction GetDirectionFromCurrentMap(long targetMapId)
+        {
+            if (m_CurrentMapComponent == null || m_CurrentMapComponent.mapInformation == null)
+                return WorldMapManager.Direction.North;
+                
+            if (m_CurrentMapComponent.mapInformation.topNeighbourId == targetMapId)
+                return WorldMapManager.Direction.North;
+                
+            if (m_CurrentMapComponent.mapInformation.rightNeighbourId == targetMapId)
+                return WorldMapManager.Direction.East;
+                
+            if (m_CurrentMapComponent.mapInformation.bottomNeighbourId == targetMapId)
+                return WorldMapManager.Direction.South;
+                
+            if (m_CurrentMapComponent.mapInformation.leftNeighbourId == targetMapId)
+                return WorldMapManager.Direction.West;
+                
+            return WorldMapManager.Direction.North;
+        }
+        
+        private void CreateAdjacentMapWorld(WorldMapManager.Direction direction)
+        {
+            if (m_CurrentMapComponent == null || m_CurrentMapComponent.mapInformation == null)
+            {
+                EditorUtility.DisplayDialog("Erreur", "Aucun MapComponent trouvé dans la scène active!", "OK");
+                return;
+            }
+            
+            // Générer un nouvel ID de map
+            long newMapId = GenerateNewWorldMapId();
+            
+            // Créer le dossier pour la nouvelle map si nécessaire
+            string folderPath = $"Assets/CreatorMap/Maps/{newMapId % 10}";
+            if (!System.IO.Directory.Exists(folderPath))
+            {
+                System.IO.Directory.CreateDirectory(folderPath);
+                AssetDatabase.Refresh();
+            }
+            
+            // Sauvegarder la scène actuelle
+            EditorSceneManager.SaveOpenScenes();
+            
+            // Créer une nouvelle scène
+            var newScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            
+            // Configuration de la scène avec les mêmes éléments que dans CreateNewMap
+            
+            // 1. Setup camera with proper configuration
+            var cameraObject = new GameObject("Main Camera");
+            var camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 4.85f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(15f/255f, 15f/255f, 15f/255f, 1f); // RGB(15,15,15)
+            camera.nearClipPlane = -1000f;
+            camera.farClipPlane = 1000f;
+            camera.depth = -1f;
+            
+            // Set exact camera position
+            cameraObject.transform.position = new Vector3(6.2f, 2.7f, -10f);
+            
+            // Add camera controller with proper settings
+            var cameraController = cameraObject.AddComponent<GridCameraController>();
+            
+            // 2. Create the Grid object with GridManager
+            var gridObject = new GameObject("GridManager");
+            // Position the grid at specific position
+            gridObject.transform.position = new Vector3(9.36051f, 5.147355f, -9.977507f);
+            
+            // Add the GridManager component
+            var gridManager = gridObject.AddComponent<MapCreatorGridManager>();
+            
+            // 3. Create the Map object
+            var mapObject = new GameObject($"Map {newMapId}");
+            
+            // Set transform position to origin
+            mapObject.transform.position = Vector3.zero;
+            
+            // Add the MapComponent
+            var newMapComponent = mapObject.AddComponent<MapComponent>();
+            
+            // Initialiser les données de la map
+            newMapComponent.mapInformation = new MapBasicInformation();
+            newMapComponent.mapInformation.id = (int)newMapId;
+            newMapComponent.mapInformation.InitializeAllCells();
+            
+            // Définir la map précédente comme voisine dans la direction opposée
+            switch (direction)
+            {
+                case WorldMapManager.Direction.North:
+                    newMapComponent.mapInformation.bottomNeighbourId = (long)m_CurrentMapComponent.mapInformation.id;
+                    break;
+                case WorldMapManager.Direction.East:
+                    newMapComponent.mapInformation.leftNeighbourId = (long)m_CurrentMapComponent.mapInformation.id;
+                    break;
+                case WorldMapManager.Direction.South:
+                    newMapComponent.mapInformation.topNeighbourId = (long)m_CurrentMapComponent.mapInformation.id;
+                    break;
+                case WorldMapManager.Direction.West:
+                    newMapComponent.mapInformation.rightNeighbourId = (long)m_CurrentMapComponent.mapInformation.id;
+                    break;
+            }
+            
+            // Set background color to black
+            newMapComponent.backgroundColor = Color.black;
+            
+            // Initialize GridManager data
+            gridManager.gridData.id = (int)newMapId;
+            gridManager.gridData.cells = new List<CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData>();
+            gridManager.gridData.cellsDict = new Dictionary<ushort, uint>();
+            
+            // Copy cell data from MapComponent to GridManager
+            foreach (var cellPair in newMapComponent.mapInformation.cells.dictionary)
+            {
+                gridManager.gridData.cells.Add(new CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData(cellPair.Key, cellPair.Value));
+                gridManager.gridData.cellsDict[cellPair.Key] = cellPair.Value;
+            }
+            
+            // Add editor controller to GridManager
+            var editorController = gridObject.AddComponent<CreatorMap.Scripts.Editor.MapEditorController>();
+            
+            // Add GridDataSync to ensure data synchronization
+            var gridDataSync = gridObject.AddComponent<CreatorMap.Scripts.Core.Grid.GridDataSync>();
+            
+            // Initialize the grid
+            gridManager.CreateGrid();
+            
+            // Keep GridManager as a separate object in the scene
+            gridObject.transform.SetParent(null);
+            
+            // Ensure everything is marked as dirty
+            EditorUtility.SetDirty(gridManager);
+            EditorUtility.SetDirty(gridObject);
+            EditorUtility.SetDirty(newMapComponent);
+            EditorUtility.SetDirty(mapObject);
+            
+            // Sauvegarder la nouvelle scène
+            string mapPath = $"Assets/CreatorMap/Maps/{newMapId % 10}/{newMapId}.unity";
+            EditorSceneManager.SaveScene(newScene, mapPath);
+            
+            // Ajouter l'ID de la nouvelle map à la map précédente
+            long currentMapId = m_CurrentMapComponent.mapInformation.id;
+            string currentMapPath = $"Assets/CreatorMap/Maps/{currentMapId % 10}/{currentMapId}.unity";
+            
+            // Ouvrir la scène de la map précédente
+            EditorSceneManager.OpenScene(currentMapPath, OpenSceneMode.Single);
+            
+            // Trouver le MapComponent et mettre à jour les références
+            m_CurrentMapComponent = FindObjectOfType<MapComponent>();
+            if (m_CurrentMapComponent != null && m_CurrentMapComponent.mapInformation != null)
+            {
+                switch (direction)
+                {
+                    case WorldMapManager.Direction.North:
+                        m_CurrentMapComponent.mapInformation.topNeighbourId = newMapId;
+                        break;
+                    case WorldMapManager.Direction.East:
+                        m_CurrentMapComponent.mapInformation.rightNeighbourId = newMapId;
+                        break;
+                    case WorldMapManager.Direction.South:
+                        m_CurrentMapComponent.mapInformation.bottomNeighbourId = newMapId;
+                        break;
+                    case WorldMapManager.Direction.West:
+                        m_CurrentMapComponent.mapInformation.leftNeighbourId = newMapId;
+                        break;
+                }
+                
+                EditorUtility.SetDirty(m_CurrentMapComponent);
+                EditorSceneManager.SaveOpenScenes();
+            }
+            
+            // Ouvrir la nouvelle map
+            EditorSceneManager.OpenScene(mapPath, OpenSceneMode.Single);
+            
+            // Mettre à jour les caches
+            m_ExistingMaps[newMapId] = true;
+            
+            EditorUtility.DisplayDialog("Succès", $"Map adjacente #{newMapId} créée avec succès.", "OK");
+            RefreshMapNavigation();
+
+            // Si une tuile de terrain par défaut est sélectionnée, l'appliquer à toutes les cellules
+            if (m_UseDefaultGroundTile && m_DefaultGroundTile != null)
+            {
+                Debug.Log($"Applying default ground tile ID:{m_DefaultGroundTile.Id} to adjacent map");
+                
+                // Après avoir chargé la nouvelle scène, nous devons retrouver le MapComponent
+                // car les références précédentes ne sont plus valides
+                MapComponent sceneMapComponent = FindObjectOfType<MapComponent>();
+                if (sceneMapComponent == null)
+                {
+                    Debug.LogError("Impossible de trouver le MapComponent dans la scène nouvellement créée.");
+                    return;
+                }
+                
+                GameObject sceneMapObject = sceneMapComponent.gameObject;
+                
+                // Ajouter le TileSpriteManager directement à l'objet Map
+                var tileSpriteManager = sceneMapObject.GetComponent<CreatorMap.Scripts.TileSpriteManager>();
+                if (tileSpriteManager == null)
+                {
+                    tileSpriteManager = sceneMapObject.AddComponent<CreatorMap.Scripts.TileSpriteManager>();
+                }
+                
+                // S'assurer que le TileSpriteManager utilise l'objet Map comme parent pour les tuiles
+                tileSpriteManager.SetMapContainer(sceneMapObject);
+                
+                // Vérifier si la map a un SpriteData initialisé
+                if (sceneMapComponent.mapInformation.SpriteData == null)
+                {
+                    sceneMapComponent.mapInformation.SpriteData = new CreatorMap.Scripts.Data.MapSpriteData();
+                }
+                
+                // Obtenir le chemin de la tile pour le chargement
+                string tilePath = GetAddressablePath(m_DefaultGroundTile);
+                
+                // Pour chaque cellule de la grille, créer une instance de la tile de terrain
+                for (int cellId = 0; cellId < 560; cellId++)
+                {
+                    // Obtenir la position de la cellule dans l'espace de la scène
+                    var point = Managers.Scene.SceneConverter.GetSceneCoordByCellId(cellId);
+                    if (point == null) continue;
+                    
+                    // Ajuster la position pour centrer la tuile sur la cellule
+                    // Ces ajustements sont basés sur la taille des cellules dans la grille
+                    float cellWidth = 0.86f;  // Largeur d'une cellule
+                    float cellHeight = 0.43f; // Hauteur d'une cellule
+                    
+                    // Position ajustée pour que la tuile soit centrée
+                    Vector3 adjustedPosition = new Vector3(
+                        point.X + cellWidth/2, 
+                        point.Y, 
+                        0
+                    );
+                    
+                    // Randomiser le flip horizontal pour plus de variété visuelle
+                    bool randomFlipX = UnityEngine.Random.value > 0.5f;
+                    
+                    // Créer une nouvelle instance de données de tile
+                    var tileData = new CreatorMap.Scripts.Data.TileSpriteData
+                    {
+                        Id = m_DefaultGroundTile.Id,
+                        Position = new Vector2(point.X, point.Y),  // On conserve la position originale dans les données
+                        Scale = m_DefaultGroundTile.Scale,
+                        Order = 0, // Ground tiles sont au niveau le plus bas (0)
+                        FlipX = randomFlipX, // Utiliser la valeur randomisée
+                        FlipY = m_DefaultGroundTile.FlipY,
+                        Color = new CreatorMap.Scripts.Data.TileColorData 
+                        { 
+                            Red = 1f, 
+                            Green = 1f, 
+                            Blue = 1f, 
+                            Alpha = 1f 
+                        }
+                    };
+                    
+                    // Générer un ID unique pour la tile
+                    string uniqueTileId = $"tile_{m_DefaultGroundTile.Id}_{cellId}";
+                    
+                    // Créer la tile dans la scène avec la position ajustée
+                    var tileSprite = tileSpriteManager.CreateTileSprite(
+                        uniqueTileId,
+                        tilePath,
+                        0, // Type 0 = ground
+                        adjustedPosition,  // Utilisation de la position ajustée
+                        tileData.FlipX,
+                        tileData.FlipY,
+                        tileData.Color.Red,
+                        tileData.Color.Green,
+                        tileData.Color.Blue,
+                        tileData.Color.Alpha,
+                        tileData.Order
+                    );
+                    
+                    // Ajouter la tile aux données de la map
+                    sceneMapComponent.mapInformation.SpriteData.tiles.Add(tileData);
+                }
+                
+                // Marquer le composant comme sale pour enregistrer les modifications
+                EditorUtility.SetDirty(sceneMapComponent);
+                // Sauvegarder la scène pour conserver les modifications
+                EditorSceneManager.SaveOpenScenes();
+            }
+        }
+        
+        private void LoadMapWorld(long mapId)
+        {
+            string mapPath = $"Assets/CreatorMap/Maps/{mapId % 10}/{mapId}.unity";
+            
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(mapPath) == null)
+            {
+                EditorUtility.DisplayDialog("Erreur", $"La map #{mapId} n'existe pas à {mapPath}", "OK");
+                return;
+            }
+            
+            if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                EditorSceneManager.OpenScene(mapPath, OpenSceneMode.Single);
+                RefreshMapNavigation();
+            }
+        }
+        
+        /// <summary>
+        /// Génère un nouvel ID de map basé sur l'heure actuelle pour World Navigation
+        /// </summary>
+        private long GenerateNewWorldMapId()
+        {
+            // Format: 1MMDDHHSS où
+            // MM = mois (01-12), DD = jour (01-31), HH = heure (00-23), SS = secondes (00-59)
+            // Exemple: 107151432 = 7 janvier, 14:32
+            System.DateTime now = System.DateTime.Now;
+            long mapId = 1;
+            mapId = mapId * 100 + now.Month;
+            mapId = mapId * 100 + now.Day;
+            mapId = mapId * 100 + now.Hour;
+            mapId = mapId * 100 + now.Second;
+            
+            return mapId;
+        }
+
+        // Ajouter cette méthode pour mettre à jour les références bidirectionnelles
+        private void UpdateNeighborMapReference(long neighborMapId, WorldMapManager.Direction direction, bool saveCurrentScene = true)
+        {
+            if (neighborMapId <= 0 || m_CurrentMapComponent == null || m_CurrentMapComponent.mapInformation == null)
+                return;
+
+            // Obtenir l'ID de la map actuelle
+            long currentMapId = m_CurrentMapComponent.mapInformation.id;
+            
+            // Sauvegarder la scène actuelle si demandé
+            if (saveCurrentScene)
+            {
+                EditorSceneManager.SaveOpenScenes();
+            }
+            
+            // Vérifier si la map voisine existe
+            string neighborMapPath = $"Assets/CreatorMap/Maps/{neighborMapId % 10}/{neighborMapId}.unity";
+            
+            #if UNITY_EDITOR
+            if (!AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(neighborMapPath))
+            {
+                Debug.LogWarning($"[WorldMapNavigator] La map voisine #{neighborMapId} n'existe pas, impossible de mettre à jour sa référence.");
+                return;
+            }
+            
+            try
+            {
+                // Garder une référence à la scène actuelle
+                var currentScene = EditorSceneManager.GetActiveScene();
+                
+                // Ouvrir la map voisine en mode additif
+                var sceneLoadOperation = EditorSceneManager.OpenScene(neighborMapPath, OpenSceneMode.Additive);
+                
+                // Trouver le MapComponent de la map voisine
+                var neighborMapComponents = Resources.FindObjectsOfTypeAll<MapComponent>();
+                MapComponent neighborMapComponent = null;
+                
+                foreach (var comp in neighborMapComponents)
+                {
+                    if (comp.mapInformation != null && comp.mapInformation.id == neighborMapId)
+                    {
+                        neighborMapComponent = comp;
+                        break;
+                    }
+                }
+                
+                if (neighborMapComponent != null && neighborMapComponent.mapInformation != null)
+                {
+                    // Mettre à jour la référence dans la direction opposée
+                    switch (direction)
+                    {
+                        case WorldMapManager.Direction.North:
+                            // Si on est au nord de la map voisine, cette map est au sud de nous
+                            neighborMapComponent.mapInformation.bottomNeighbourId = currentMapId;
+                            break;
+                        case WorldMapManager.Direction.East:
+                            // Si on est à l'est de la map voisine, cette map est à l'ouest de nous
+                            neighborMapComponent.mapInformation.leftNeighbourId = currentMapId;
+                            break;
+                        case WorldMapManager.Direction.South:
+                            // Si on est au sud de la map voisine, cette map est au nord de nous
+                            neighborMapComponent.mapInformation.topNeighbourId = currentMapId;
+                            break;
+                        case WorldMapManager.Direction.West:
+                            // Si on est à l'ouest de la map voisine, cette map est à l'est de nous
+                            neighborMapComponent.mapInformation.rightNeighbourId = currentMapId;
+                            break;
+                    }
+                    
+                    // Marquer comme dirty et sauvegarder
+                    EditorUtility.SetDirty(neighborMapComponent);
+                    EditorSceneManager.SaveScene(sceneLoadOperation);
+                    
+                    Debug.Log($"[WorldMapNavigator] Map #{neighborMapId} mise à jour avec référence vers map #{currentMapId}");
+                }
+                else
+                {
+                    Debug.LogWarning($"[WorldMapNavigator] MapComponent non trouvé pour la map #{neighborMapId}");
+                }
+                
+                // Fermer la scène additionnelle
+                EditorSceneManager.CloseScene(sceneLoadOperation, true);
+                
+                // S'assurer que la scène actuelle est active
+                EditorSceneManager.SetActiveScene(currentScene);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[WorldMapNavigator] Erreur lors de la mise à jour de la map voisine: {ex.Message}");
+            }
+            #endif
         }
     }
 }
