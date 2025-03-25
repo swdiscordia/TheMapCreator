@@ -38,7 +38,6 @@ namespace MapCreator.Editor
         static void Initialize()
         {
             // Force recompilation by changing this comment
-            Debug.Log("MapCreatorSceneGUI initialized - using NewMapCreatorWindowType");
             SceneView.duringSceneGui -= OnSceneGUI;
             SceneView.duringSceneGui += OnSceneGUI;
             
@@ -55,20 +54,12 @@ namespace MapCreator.Editor
             {
                 Debug.LogWarning("Texture ble.png not found at Assets/CreatorMap/Editor/Icons/ble.png");
             }
-            else
-            {
-                Debug.Log("Successfully loaded ble.png from Icons folder");
-            }
             
             // Charger la texture de l'œil fermé
             s_ClosedEyeTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/CreatorMap/Editor/Icons/eye_13949475.png");
             if (s_ClosedEyeTexture == null)
             {
                 Debug.LogWarning("Texture eye_13949475.png not found at Assets/CreatorMap/Editor/Icons/eye_13949475.png");
-            }
-            else
-            {
-                Debug.Log("Successfully loaded eye_13949475.png from Icons folder");
             }
         }
 
@@ -1283,10 +1274,6 @@ namespace MapCreator.Editor
             if (!string.IsNullOrEmpty(path))
             {
                 previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
-                if (previewSprite != null)
-                {
-                    Debug.Log($"Preview: Successfully loaded sprite from primary path: {path}");
-                }
             }
             
             // If primary path failed, try alternative paths
@@ -1300,10 +1287,6 @@ namespace MapCreator.Editor
                     if (System.IO.File.Exists(altPath))
                     {
                         previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(altPath);
-                        if (previewSprite != null)
-                        {
-                            Debug.Log($"Preview: Successfully loaded sprite from content path: {altPath}");
-                        }
                     }
                 }
                 
@@ -1315,10 +1298,6 @@ namespace MapCreator.Editor
                     if (System.IO.File.Exists(thirdAltPath))
                     {
                         previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(thirdAltPath);
-                        if (previewSprite != null)
-                        {
-                            Debug.Log($"Preview: Successfully loaded sprite from third path: {thirdAltPath}");
-                        }
                     }
                 }
             }
@@ -2013,6 +1992,7 @@ namespace MapCreator.Editor
             // Initialize all cells (0-559) with all walkable by default (IsVisible = true)
             // Default value: 64 (bit 6 = IsVisible)
             const uint DEFAULT_CELL_FLAGS = 0x0040; // IsVisible flag (bit 6)
+            Debug.Log("[EDITOR] Setting all cells as walkable by default (bit 0 = 0)");
             
             for (ushort cellId = 0; cellId < 560; cellId++)
             {
