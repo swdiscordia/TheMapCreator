@@ -3,23 +3,24 @@ using UnityEditor;
 using UnityEngine;
 using UnityEditor.SceneManagement;
 using System.IO;
-using Managers.Maps.MapCreator;
 using System;
 using System.Collections.Generic;
 using Managers.Cameras;
 using CreatorMap.Scripts.Data;
-using MapCreator.Data.Models;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using Components.Maps;
-using UnityEngine.SceneManagement; // Ajout pour SceneManager
+using UnityEngine.SceneManagement;
 using System.Linq;
+using CreatorMap.Scripts.Core.Grid;
+using CreatorMap.Scripts.Core;
+using CreatorMap.Scripts.Editor;
 // Adding explicit references to ensure they're included in compilation
 using TileSpriteData = CreatorMap.Scripts.Data.TileSpriteData;
 using TileColorData = CreatorMap.Scripts.Data.TileColorData;
 // Add explicit references to avoid ambiguity for types used in map creation
-using MapCreatorBasicInfo = Managers.Maps.MapCreator.MapBasicInformation;
-using MapCreatorDict = Managers.Maps.MapCreator.SerializableDictionary<ushort, ushort>;
+using MapCreatorGridData = CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.GridData;
+using MapCreatorCellData = CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData;
 
 namespace MapCreator.Editor
 {
@@ -27,6 +28,9 @@ namespace MapCreator.Editor
     {
         private int m_SelectedTab = 0;
         private readonly string[] m_Tabs = { "Map Settings", "Draw Mode" };
+
+        // Scroll position for draw mode
+        private Vector2 m_DrawModeScrollPosition;
 
         // Map dimension settings
         private int m_MapWidth = (int)Models.Maps.MapConstants.Width;
@@ -92,7 +96,6 @@ namespace MapCreator.Editor
         private Texture2D m_EraserIcon; // Icon for eraser tool
 
         private Vector2 m_TileScrollPosition;
-        private Vector2 m_DrawModeScrollPosition; // Scroll position for Draw Mode tab
         private List<TileSpriteData> m_AvailableTiles = new List<TileSpriteData>();
         public static DrawMode CurrentDrawMode => Instance?.m_CurrentDrawMode ?? DrawMode.None;
         public static NewMapCreatorWindow Instance { get; private set; }
@@ -875,29 +878,61 @@ namespace MapCreator.Editor
                 var cameraController = cameraObject.AddComponent<GridCameraController>();
                 
                 // 2. Create the Grid object with GridManager
-                var gridObject = new GameObject("Grid");
+                var gridObject = new GameObject("GridManager");
                 // Position the grid at specific position
                 gridObject.transform.position = new Vector3(9.36051f, 5.147355f, -9.977507f);
                 
                 // Add the GridManager component
                 var gridManager = gridObject.AddComponent<MapCreatorGridManager>();
                 
-                // 3. Create the Map object with MapComponent
+                // 3. Create the Map object with GridManager reference
                 var mapObject = new GameObject(mapObjectName);
                 
                 // Set transform position to origin
                 mapObject.transform.position = Vector3.zero;
                 
-                // Add MapComponent to store map data
-                var mapComponent = mapObject.AddComponent<MapComponent>();
-                mapComponent.mapInformation = new MapCreatorBasicInfo
+                // Add the MapComponent for compatibility with the main project
+                var mapComponent = mapObject.AddComponent<Components.Maps.MapComponent>();
+                
+                // Make sure mapInformation exists
+                mapComponent.mapInformation = new CreatorMap.Scripts.Data.MapBasicInformation();
+                mapComponent.mapInformation.id = mapId;
+                
+                // Initialize the cells in MapComponent
+                mapComponent.mapInformation.InitializeAllCells();
+                
+                // Set background color to black
+                mapComponent.backgroundColor = Color.black;
+                
+                // Initialize GridManager data
+                gridManager.gridData.id = mapId;
+                gridManager.gridData.cells = new List<CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData>();
+                gridManager.gridData.cellsDict = new Dictionary<ushort, uint>();
+                
+                // Copy cell data from MapComponent to GridManager
+                foreach (var cellPair in mapComponent.mapInformation.cells.dictionary)
                 {
-                    id = mapId,
-                    cells = new MapCreatorDict { dictionary = new Dictionary<ushort, ushort>() }
-                };
+                    gridManager.gridData.cells.Add(new CreatorMap.Scripts.Core.Grid.MapCreatorGridManager.CellData(cellPair.Key, cellPair.Value));
+                    gridManager.gridData.cellsDict[cellPair.Key] = cellPair.Value;
+                }
+                
+                // Add editor controller to GridManager
+                var editorController = gridObject.AddComponent<CreatorMap.Scripts.Editor.MapEditorController>();
+                
+                // Add GridDataSync to ensure data synchronization
+                var gridDataSync = gridObject.AddComponent<CreatorMap.Scripts.Core.Grid.GridDataSync>();
                 
                 // Initialize the grid
                 gridManager.CreateGrid();
+                
+                // Keep GridManager as a separate object in the scene
+                gridObject.transform.SetParent(null);
+                
+                // Ensure everything is marked as dirty
+                UnityEditor.EditorUtility.SetDirty(gridManager);
+                UnityEditor.EditorUtility.SetDirty(gridObject);
+                UnityEditor.EditorUtility.SetDirty(mapComponent);
+                UnityEditor.EditorUtility.SetDirty(mapObject);
                 
                 // Log creation with subfolder information
                 Debug.Log($"Scene '{sceneObjectName}' with Map '{mapObjectName}' (ID: {mapId}) created in folder {folderIndex} with size {width}x{height}.");
