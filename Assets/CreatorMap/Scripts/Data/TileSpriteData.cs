@@ -10,6 +10,7 @@ namespace CreatorMap.Scripts.Data
     [Serializable]
     public class TileColorData
     {
+        // Stocke les valeurs comme dans le projet principal
         public float Red = 1f;
         public float Green = 1f;
         public float Blue = 1f;
@@ -24,6 +25,43 @@ namespace CreatorMap.Scripts.Data
         public Color ToColor()
         {
             return new Color(Red, Green, Blue, Alpha);
+        }
+        
+        /// <summary>
+        /// Convertit en ColorMultiplicator compatible avec le projet principal
+        /// </summary>
+        public ColorMultiplicator ToColorMultiplicator()
+        {
+            if (IsOne)
+            {
+                return new ColorMultiplicator(0, 0, 0);
+            }
+            
+            // Conversion en valeurs entières comme dans le projet principal
+            int red = Red > 1f ? (int)Red : (int)(Red * 255f);
+            int green = Green > 1f ? (int)Green : (int)(Green * 255f);
+            int blue = Blue > 1f ? (int)Blue : (int)(Blue * 255f);
+            
+            return new ColorMultiplicator(red, green, blue, !IsOne);
+        }
+        
+        /// <summary>
+        /// Crée un TileColorData à partir d'un ColorMultiplicator
+        /// </summary>
+        public static TileColorData FromColorMultiplicator(ColorMultiplicator colorMultiplicator)
+        {
+            if (colorMultiplicator == null || colorMultiplicator.IsOne)
+            {
+                return new TileColorData(); // Valeurs par défaut (1,1,1,1)
+            }
+            
+            return new TileColorData
+            {
+                Red = colorMultiplicator.Red,
+                Green = colorMultiplicator.Green,
+                Blue = colorMultiplicator.Blue,
+                Alpha = 1f // Alpha est généralement 1 pour les tiles
+            };
         }
     }
     
@@ -67,7 +105,7 @@ namespace CreatorMap.Scripts.Data
     [Serializable]
     public class MapSpriteData
     {
-        public List<TileSpriteData> Tiles = new List<TileSpriteData>();
-        public List<FixtureSpriteData> Fixtures = new List<FixtureSpriteData>();
+        public List<TileSpriteData> tiles = new List<TileSpriteData>();
+        public List<FixtureSpriteData> fixtures = new List<FixtureSpriteData>();
     }
 } 

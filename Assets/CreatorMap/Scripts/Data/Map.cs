@@ -6,32 +6,34 @@ using Components.Maps;
 using Managers.Maps;
 using MapCreator.Data.Models;
 using Models.Maps;
+using CreatorMap.Scripts.Core.Grid;
+using CreatorMap.Scripts.Data;
 // using Models.Actors;
 
 namespace Models.Maps
 {
     public class Map 
     {
-        public MapBasicInformation BasicInformation { get; }
+        public MapCreatorGridManager.GridData GridData { get; }
         private readonly MapPosition _mapPosition;
 
-        public readonly List<Cell> Cells;
+        public readonly List<MapCreator.Data.Models.Cell> Cells;
         // public readonly List<ActorSprite> Actors = new();
         
-        public long Id => BasicInformation.id;
+        public long Id => GridData.id;
 
-        public Map(MapBasicInformation basicInformation, MapPosition mapPosition)
+        public Map(MapCreatorGridManager.GridData gridData, MapPosition mapPosition)
         {
-            BasicInformation = basicInformation;
-            _mapPosition     = mapPosition;
+            GridData = gridData;
+            _mapPosition = mapPosition;
 
-            Cells = new List<Cell>();
+            Cells = new List<MapCreator.Data.Models.Cell>();
 
-            if (basicInformation.cells != null)
+            if (gridData.cells != null)
             {
-                foreach (var pair in basicInformation.cells.dictionary)
+                foreach (var cell in gridData.cells)
                 {
-                    Cells.Add(new Cell((short)pair.Key, (short)pair.Value));
+                    Cells.Add(new MapCreator.Data.Models.Cell((short)cell.cellId, (short)cell.flags));
                 }
             }
         }
@@ -41,7 +43,7 @@ namespace Models.Maps
             return cellId is >= 0 and < 561;
         }
 
-        public Cell? GetCell(short cellId)
+        public MapCreator.Data.Models.Cell? GetCell(short cellId)
         {
             return !IsValidCellId(cellId) ? null : Cells[cellId];
         }
