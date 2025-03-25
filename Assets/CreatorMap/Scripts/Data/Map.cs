@@ -8,23 +8,59 @@ using MapCreator.Data.Models;
 using Models.Maps;
 using CreatorMap.Scripts.Core.Grid;
 using CreatorMap.Scripts.Data;
+using UnityEngine; // Added for Debug class
 // using Models.Actors;
 
 namespace Models.Maps
 {
     public class Map 
     {
-        public MapCreatorGridManager.GridData GridData { get; }
+        // Keep GridData for backward compatibility, but it's no longer the primary data source
+        private readonly MapCreatorGridManager.GridData? m_GridData;
         private readonly MapPosition _mapPosition;
+        private readonly MapComponent? m_MapComponent;
 
         public readonly List<MapCreator.Data.Models.Cell> Cells;
         // public readonly List<ActorSprite> Actors = new();
         
-        public long Id => GridData.id;
+        public long Id => m_MapComponent != null && m_MapComponent.mapInformation != null ? 
+                        m_MapComponent.mapInformation.id : 
+                        (m_GridData != null ? m_GridData.id : 0);
 
+        /// <summary>
+        /// Constructor that takes a MapComponent as the primary data source (preferred)
+        /// </summary>
+        public Map(MapComponent mapComponent, MapPosition mapPosition)
+        {
+            m_MapComponent = mapComponent;
+            _mapPosition = mapPosition;
+            
+            Cells = new List<MapCreator.Data.Models.Cell>();
+            
+            if (mapComponent != null && mapComponent.mapInformation != null && 
+                mapComponent.mapInformation.cells != null && mapComponent.mapInformation.cells.dictionary != null)
+            {
+                foreach (var pair in mapComponent.mapInformation.cells.dictionary)
+                {
+                    Cells.Add(new MapCreator.Data.Models.Cell((short)pair.Key, (short)pair.Value));
+                }
+                
+                Debug.Log($"[Map] Created map from MapComponent with {Cells.Count} cells");
+            }
+            else
+            {
+                Debug.LogWarning("[Map] MapComponent or its data is null, map will be empty");
+            }
+        }
+
+        /// <summary>
+        /// Legacy constructor that takes GridData (kept for compatibility)
+        /// </summary>
         public Map(MapCreatorGridManager.GridData gridData, MapPosition mapPosition)
         {
-            GridData = gridData;
+            Debug.LogWarning("[Map] Using deprecated GridData constructor - consider updating to MapComponent version");
+            
+            m_GridData = gridData;
             _mapPosition = mapPosition;
 
             Cells = new List<MapCreator.Data.Models.Cell>();
@@ -35,6 +71,8 @@ namespace Models.Maps
                 {
                     Cells.Add(new MapCreator.Data.Models.Cell((short)cell.cellId, (short)cell.flags));
                 }
+                
+                Debug.Log($"[Map] Created map from GridData with {Cells.Count} cells");
             }
         }
 
@@ -50,33 +88,33 @@ namespace Models.Maps
 
         public bool PointMov(int x, int y, int previousCell = -1, bool isInFight = false)
         {
-            if (!MapPoint.IsInMap(x, y))
+            var startCell = previousCell > -1 && IsValidCellId(previousCell) ? (int) previousCell : -1;
+            var endCell   = MapTools.GetCellIdByCoord(x, y);
+
+            if (endCell == -1)
             {
                 return false;
             }
 
-            var cell = GetCell(MapPoint.GetPoint(x, y)!.CellId);
+            return startCell < 0 || CanMoveToCell(startCell, endCell);
+        }
 
-            var mov = cell!.IsWalkable;
-
-            if (isInFight && !cell.IsNonWalkableDuringFight)
+        public bool CanMoveToCell(int startCell, int endCell)
+        {
+            if (!IsValidCellId(startCell) || !IsValidCellId(endCell))
             {
-                mov = false;
+                return false;
             }
 
-            if (mov && previousCell != -1 && previousCell != cell.Id)
-            {
-                var previousCellData = Cells[(short)previousCell];
-                var dif              = Math.Abs(Math.Abs(cell.Floor) - Math.Abs(previousCellData.Floor));
+            var startCellObj = GetCell((short) startCell);
+            var endCellObj   = GetCell((short) endCell);
 
-                if (previousCellData.MoveZone != cell.MoveZone && dif > 0 ||
-                    previousCellData.MoveZone == cell.MoveZone && cell.MoveZone == 0 && dif > 11)
-                {
-                    mov = false;
-                }
+            if (startCellObj == null || endCellObj == null || !startCellObj.IsAllWalkable || !endCellObj.IsAllWalkable)
+            {
+                return false;
             }
 
-            return mov;
+            return true;
         }
 
         public double PointWeight(int x, int y, bool allowTroughEntity = true)

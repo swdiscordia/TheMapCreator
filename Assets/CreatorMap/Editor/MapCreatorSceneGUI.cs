@@ -765,14 +765,27 @@ namespace MapCreator.Editor
             var mapComponent = FindMapComponent();
             if (mapComponent == null || mapComponent.mapInformation == null) return;
             
+            // Check if we should clip to grid
+            bool useClipping = NewMapCreatorWindowType.Instance != null && NewMapCreatorWindowType.Instance.UseClipping();
+            
+            // Check if we're placing in a non-walkable cell while snap to grid is enabled
+            if (useClipping && cell.Cell != null && !cell.IsWalkable)
+            {
+                // Show a warning message in the scene view
+                SceneView.lastActiveSceneView.ShowNotification(
+                    new GUIContent("Cannot place tiles on non-walkable cells when 'Clip to Grid' is enabled"),
+                    3.0f // Duration in seconds
+                );
+                
+                Debug.LogWarning("[MapCreator] Cannot place tiles on non-walkable cells when 'Clip to Grid' is enabled");
+                return; // Exit without placing the tile
+            }
+            
             // Get the cell center position - the key for proper placement
             Vector3 cellPosition = GetCellCenterPosition(cell);
             
             // Check if we're placing a fixture
             bool isFixture = NewMapCreatorWindowType.Instance != null && NewMapCreatorWindowType.Instance.IsFixtureTile();
-            
-            // Check if we should clip to grid
-            bool useClipping = NewMapCreatorWindowType.Instance != null && NewMapCreatorWindowType.Instance.UseClipping();
             
             // If not clipping to grid, use the exact mouse position instead of cell center
             if (!useClipping)
@@ -1257,11 +1270,24 @@ namespace MapCreator.Editor
                     var cell = hit.collider.GetComponent<CellComponent>();
                     if (cell != null && cell.Cell != null && IsValidCell(cell))
                     {
+                        // Check if cell is walkable when clip to grid is enabled
+                        if (!cell.IsWalkable)
+                        {
+                            // Do not show preview on non-walkable cells
+                            return;
+                        }
+                        
                         // Get the center position of the cell
                         mousePosition = GetCellCenterPosition(cell);
                         hoverCell = cell;
                         break;
                     }
+                }
+                
+                // If clipping is enabled but no valid walkable cell was found, don't show preview
+                if (useClipping && hoverCell == null)
+                {
+                    return;
                 }
             }
             
@@ -1279,27 +1305,7 @@ namespace MapCreator.Editor
             // If primary path failed, try alternative paths
             if (previewSprite == null)
             {
-                // Try content path
-                if (numericId.Length >= 2)
-                {
-                    string subfolder = numericId.Substring(0, 2);
-                    string altPath = $"Assets/CreatorMap/Content/Tiles/{subfolder}/{numericId}.png";
-                    if (System.IO.File.Exists(altPath))
-                    {
-                        previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(altPath);
-                    }
-                }
-                
-                // Try another alternative path structure
-                if (previewSprite == null && numericId.Length >= 2)
-                {
-                    string subfolder = numericId.Substring(0, 2);
-                    string thirdAltPath = $"Assets/CreatorMap/Tiles/{subfolder}/{numericId}.png";
-                    if (System.IO.File.Exists(thirdAltPath))
-                    {
-                        previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(thirdAltPath);
-                    }
-                }
+                previewSprite = LoadTileSprite(numericId);
             }
             
             // Draw preview
@@ -2047,6 +2053,38 @@ namespace MapCreator.Editor
             mapInfo.SpriteData = null;
             
             Debug.Log("[EDITOR] MapComponent cleaned up - removed all unwanted fields");
+        }
+
+        /// <summary>
+        /// Load a tile sprite using multiple possible paths
+        /// </summary>
+        private static Sprite LoadTileSprite(string numericId)
+        {
+            Sprite previewSprite = null;
+            
+            // Try content path
+            if (numericId.Length >= 2)
+            {
+                string subfolder = numericId.Substring(0, 2);
+                string altPath = $"Assets/CreatorMap/Content/Tiles/{subfolder}/{numericId}.png";
+                if (System.IO.File.Exists(altPath))
+                {
+                    previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(altPath);
+                }
+            }
+            
+            // Try another alternative path structure
+            if (previewSprite == null && numericId.Length >= 2)
+            {
+                string subfolder = numericId.Substring(0, 2);
+                string thirdAltPath = $"Assets/CreatorMap/Tiles/{subfolder}/{numericId}.png";
+                if (System.IO.File.Exists(thirdAltPath))
+                {
+                    previewSprite = AssetDatabase.LoadAssetAtPath<Sprite>(thirdAltPath);
+                }
+            }
+            
+            return previewSprite;
         }
     }
 }

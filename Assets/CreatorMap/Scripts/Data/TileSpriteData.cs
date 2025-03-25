@@ -96,6 +96,8 @@ namespace CreatorMap.Scripts.Data
         public Vector2 Scale = Vector2.one;
         public float Rotation;
         public int Order;
+        public bool FlipX;
+        public bool FlipY;
         public TileColorData Color = new TileColorData();
     }
     

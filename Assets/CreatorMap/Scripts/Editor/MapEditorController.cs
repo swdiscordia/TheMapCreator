@@ -159,7 +159,8 @@ namespace CreatorMap.Scripts.Editor
                     using (var stream = new FileStream(filePath, FileMode.Open))
                     using (var reader = new BinaryReader(stream))
                     {
-                        var container = MapDataContainer.Deserialize(reader);
+                        var container = new MapDataContainer();
+                        container.Deserialize(reader);
                         
                         // Demander quel mapId importer si plusieurs cartes sont présentes
                         if (container.Maps.Count > 1)
@@ -168,14 +169,14 @@ namespace CreatorMap.Scripts.Editor
                             // Idéalement, on devrait afficher une fenêtre de sélection ici
                             // Pour cet exemple, on prend simplement la première carte
                             var mapId = mapIds[0];
-                            var gridData = container.ToGridData(mapId);
+                            var gridData = container.GetMapAsGridData(mapId);
                             gridManager.gridData = gridData;
                             gridManager.CreateGrid();
                         }
                         else if (container.Maps.Count == 1)
                         {
                             var mapId = container.Maps.Keys.First();
-                            var gridData = container.ToGridData(mapId);
+                            var gridData = container.GetMapAsGridData(mapId);
                             gridManager.gridData = gridData;
                             gridManager.CreateGrid();
                         }

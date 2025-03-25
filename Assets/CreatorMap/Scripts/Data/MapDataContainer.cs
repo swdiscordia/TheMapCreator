@@ -4,6 +4,7 @@ using System.IO;
 using UnityEngine;
 using CreatorMap.Scripts.Core.Grid;
 using CreatorMap.Scripts.Data;
+using Components.Maps;
 
 namespace CreatorMap.Scripts.Data
 {
@@ -19,22 +20,97 @@ namespace CreatorMap.Scripts.Data
         public Dictionary<long, MapEntry> Maps { get; private set; } = new Dictionary<long, MapEntry>();
 
         /// <summary>
-        /// Updates a map in the container with data from the GridManager
+        /// Updates a map in the container with data from a MapComponent
+        /// </summary>
+        public void UpdateMap(MapComponent mapComponent)
+        {
+            if (mapComponent == null || mapComponent.mapInformation == null)
+            {
+                Debug.LogError("[MapDataContainer] Cannot update from null MapComponent");
+                return;
+            }
+            
+            long mapId = mapComponent.mapInformation.id;
+            
+            // Create entry if it doesn't exist
+            if (!Maps.TryGetValue(mapId, out var entry))
+            {
+                entry = new MapEntry { Id = mapId };
+                Maps[mapId] = entry;
+            }
+            
+            // Clear existing cells and update from MapComponent
+            entry.Cells.Clear();
+            if (mapComponent.mapInformation.cells != null && mapComponent.mapInformation.cells.dictionary != null)
+            {
+                foreach (var pair in mapComponent.mapInformation.cells.dictionary)
+                {
+                    entry.Cells[pair.Key] = pair.Value;
+                }
+            }
+            
+            // Update sprite data if available
+            if (mapComponent.mapInformation.SpriteData != null)
+            {
+                entry.SpriteData = new MapSpriteData();
+                
+                // Copy tiles
+                if (mapComponent.mapInformation.SpriteData.tiles != null)
+                {
+                    foreach (var tile in mapComponent.mapInformation.SpriteData.tiles)
+                    {
+                        entry.SpriteData.tiles.Add(tile);
+                    }
+                }
+                
+                // Copy fixtures
+                if (mapComponent.mapInformation.SpriteData.fixtures != null)
+                {
+                    foreach (var fixture in mapComponent.mapInformation.SpriteData.fixtures)
+                    {
+                        entry.SpriteData.fixtures.Add(fixture);
+                    }
+                }
+            }
+            
+            Debug.Log($"[MapDataContainer] Updated map {mapId} with {entry.Cells.Count} cells and {(entry.SpriteData?.tiles?.Count ?? 0) + (entry.SpriteData?.fixtures?.Count ?? 0)} sprites");
+        }
+        
+        /// <summary>
+        /// Legacy method to maintain compatibility
         /// </summary>
         public void UpdateMap(MapCreatorGridManager.GridData gridData)
         {
-            if (!Maps.TryGetValue(gridData.id, out var entry))
+            Debug.LogWarning("[MapDataContainer] Using deprecated UpdateMap(GridData) method - please update to use MapComponent");
+            
+            // Find MapComponent to update container from
+            var mapComponent = UnityEngine.Object.FindObjectOfType<MapComponent>();
+            if (mapComponent != null)
             {
-                entry = new MapEntry { Id = gridData.id };
-                Maps[gridData.id] = entry;
+                UpdateMap(mapComponent);
+                return;
+            }
+            
+            // Fallback to old method if MapComponent not found
+            long mapId = gridData.id;
+            
+            if (!Maps.TryGetValue(mapId, out var entry))
+            {
+                entry = new MapEntry { Id = mapId };
+                Maps[mapId] = entry;
             }
             
             // Clear existing cells and update from grid data
             entry.Cells.Clear();
-            foreach (var cell in gridData.cells)
+            if (gridData.cells != null)
             {
-                entry.Cells[cell.cellId] = cell.flags;
+                foreach (var cell in gridData.cells)
+                {
+                    entry.Cells[cell.cellId] = cell.flags;
+                }
             }
+            
+            Debug.Log($"[MapDataContainer] Updated map {mapId} with {entry.Cells.Count} cells (legacy method)");
         }
 
         /// <summary>
@@ -42,163 +118,290 @@ namespace CreatorMap.Scripts.Data
         /// </summary>
         public void Serialize(BinaryWriter writer)
         {
-            try
-            {
-                // Write version
-                writer.Write((byte)1);
-                
-                // Write map count
-                writer.Write(Maps.Count);
-                
-                // Write each map
-                foreach (var pair in Maps)
-                {
-                    var entry = pair.Value;
-                    
-                    // Write basic map info
-                    writer.Write(entry.Id);
-                    
-                    // Write cell data
-                    writer.Write(entry.Cells.Count);
-                    foreach (var cellPair in entry.Cells)
-                    {
-                        writer.Write(cellPair.Key);
-                        writer.Write(cellPair.Value);
-                    }
-                    
-                    // Write tile sprite data
-                    writer.Write(entry.SpriteData.tiles.Count);
-                    foreach (var tile in entry.SpriteData.tiles)
-                    {
-                        writer.Write(tile.Id ?? string.Empty);
-                        writer.Write(tile.Position.x);
-                        writer.Write(tile.Position.y);
-                        writer.Write(tile.Scale);
-                        writer.Write(tile.Order);
-                        writer.Write(tile.FlipX);
-                        writer.Write(tile.Color.Red);
-                        writer.Write(tile.Color.Green);
-                        writer.Write(tile.Color.Blue);
-                        writer.Write(tile.Color.Alpha);
-                    }
-                    
-                    // Write fixture sprite data
-                    writer.Write(entry.SpriteData.fixtures.Count);
-                    foreach (var fixture in entry.SpriteData.fixtures)
-                    {
-                        writer.Write(fixture.Id ?? string.Empty);
-                        writer.Write(fixture.Position.x);
-                        writer.Write(fixture.Position.y);
-                        writer.Write(fixture.Scale.x);
-                        writer.Write(fixture.Scale.y);
-                        writer.Write(fixture.Rotation);
-                        writer.Write(fixture.Order);
-                        writer.Write(fixture.Color.Red);
-                        writer.Write(fixture.Color.Green);
-                        writer.Write(fixture.Color.Blue);
-                        writer.Write(fixture.Color.Alpha);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error serializing map data container: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Deserialize the container from a binary reader
-        /// </summary>
-        public static MapDataContainer Deserialize(BinaryReader reader)
-        {
-            var container = new MapDataContainer();
+            // Write the number of maps
+            writer.Write(Maps.Count);
             
-            try
+            // Write each map
+            foreach (var map in Maps)
             {
-                // Read version
-                var version = reader.ReadByte();
+                // Write map ID
+                writer.Write(map.Key);
                 
-                // Read map count
-                var mapCount = reader.ReadInt32();
+                // Write the number of cells
+                writer.Write(map.Value.Cells.Count);
                 
-                // Read each map
-                for (int i = 0; i < mapCount; i++)
+                // Write each cell
+                foreach (var cell in map.Value.Cells)
                 {
-                    var entry = new MapEntry();
-                    
-                    // Read basic map info
-                    entry.Id = reader.ReadInt64();
-                    
-                    // Read cell count
-                    var cellCount = reader.ReadInt32();
-                    
-                    // Read cell data
-                    for (int j = 0; j < cellCount; j++)
-                    {
-                        var cellId = reader.ReadUInt16();
-                        var cellData = reader.ReadUInt16();
-                        entry.Cells[cellId] = cellData;
-                    }
-                    
-                    // Read tile sprite data
-                    var tileCount = reader.ReadInt32();
-                    for (int j = 0; j < tileCount; j++)
-                    {
-                        var tile = new TileSpriteData();
-                        tile.Id = reader.ReadString();
-                        float x = reader.ReadSingle();
-                        float y = reader.ReadSingle();
-                        tile.Position = new Vector2(x, y);
-                        tile.Scale = reader.ReadSingle();
-                        tile.Order = reader.ReadInt32();
-                        tile.FlipX = reader.ReadBoolean();
-                        tile.Color.Red = reader.ReadSingle();
-                        tile.Color.Green = reader.ReadSingle();
-                        tile.Color.Blue = reader.ReadSingle();
-                        tile.Color.Alpha = reader.ReadSingle();
-                        
-                        entry.SpriteData.tiles.Add(tile);
-                    }
-                    
-                    // Read fixture sprite data
-                    var fixtureCount = reader.ReadInt32();
-                    for (int j = 0; j < fixtureCount; j++)
-                    {
-                        var fixture = new FixtureSpriteData();
-                        fixture.Id = reader.ReadString();
-                        float x = reader.ReadSingle();
-                        float y = reader.ReadSingle();
-                        fixture.Position = new Vector2(x, y);
-                        float scaleX = reader.ReadSingle();
-                        float scaleY = reader.ReadSingle();
-                        fixture.Scale = new Vector2(scaleX, scaleY);
-                        fixture.Rotation = reader.ReadSingle();
-                        fixture.Order = reader.ReadInt32();
-                        fixture.Color.Red = reader.ReadSingle();
-                        fixture.Color.Green = reader.ReadSingle();
-                        fixture.Color.Blue = reader.ReadSingle();
-                        fixture.Color.Alpha = reader.ReadSingle();
-                        
-                        entry.SpriteData.fixtures.Add(fixture);
-                    }
-                    
-                    // Add to container
-                    container.Maps[entry.Id] = entry;
+                    writer.Write(cell.Key);
+                    writer.Write(cell.Value);
                 }
+                
+                // Write sprite data
+                WriteSpriteData(writer, map.Value.SpriteData);
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error deserializing map data container: {ex.Message}");
-            }
-            
-            return container;
         }
         
         /// <summary>
-        /// Converts a map entry to GridData format
+        /// Write sprite data to the binary writer
         /// </summary>
-        public MapCreatorGridManager.GridData ToGridData(long mapId)
+        private void WriteSpriteData(BinaryWriter writer, MapSpriteData spriteData)
         {
+            if (spriteData == null || spriteData.tiles == null)
+            {
+                writer.Write(0); // No tiles
+            }
+            else
+            {
+                // Write number of tiles
+                writer.Write(spriteData.tiles.Count);
+                
+                // Write each tile
+                foreach (var tile in spriteData.tiles)
+                {
+                    writer.Write(tile.Id);
+                    writer.Write(tile.Position.x);
+                    writer.Write(tile.Position.y);
+                    writer.Write(tile.FlipX);
+                    writer.Write(tile.FlipY);
+                    writer.Write(tile.Order);
+                    writer.Write(tile.Scale);
+                    
+                    // Write color data
+                    writer.Write(tile.Color.Red);
+                    writer.Write(tile.Color.Green);
+                    writer.Write(tile.Color.Blue);
+                    writer.Write(tile.Color.Alpha);
+                }
+            }
+            
+            if (spriteData == null || spriteData.fixtures == null)
+            {
+                writer.Write(0); // No fixtures
+            }
+            else
+            {
+                // Write number of fixtures
+                writer.Write(spriteData.fixtures.Count);
+                
+                // Write each fixture
+                foreach (var fixture in spriteData.fixtures)
+                {
+                    writer.Write(fixture.Id);
+                    writer.Write(fixture.Position.x);
+                    writer.Write(fixture.Position.y);
+                    writer.Write(fixture.FlipX);
+                    writer.Write(fixture.FlipY);
+                    writer.Write(fixture.Order);
+                    writer.Write(fixture.Scale.x);
+                    writer.Write(fixture.Scale.y);
+                    
+                    // Write color data
+                    writer.Write(fixture.Color.Red);
+                    writer.Write(fixture.Color.Green);
+                    writer.Write(fixture.Color.Blue);
+                    writer.Write(fixture.Color.Alpha);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Deserialize the container from a binary reader
+        /// </summary>
+        public void Deserialize(BinaryReader reader)
+        {
+            // Clear existing maps
+            Maps.Clear();
+            
+            // Read the number of maps
+            int mapCount = reader.ReadInt32();
+            
+            // Read each map
+            for (int i = 0; i < mapCount; i++)
+            {
+                // Read map ID
+                long mapId = reader.ReadInt64();
+                
+                // Create a new MapEntry
+                var entry = new MapEntry { Id = mapId };
+                
+                // Read the number of cells
+                int cellCount = reader.ReadInt32();
+                
+                // Read each cell
+                for (int j = 0; j < cellCount; j++)
+                {
+                    ushort cellId = reader.ReadUInt16();
+                    uint flags = reader.ReadUInt32();
+                    
+                    // Add cell to the entry
+                    entry.Cells[cellId] = flags;
+                }
+                
+                // Read sprite data
+                entry.SpriteData = ReadSpriteData(reader);
+                
+                // Add the entry to the container
+                Maps[mapId] = entry;
+            }
+        }
+        
+        /// <summary>
+        /// Read sprite data from the binary reader
+        /// </summary>
+        private MapSpriteData ReadSpriteData(BinaryReader reader)
+        {
+            var spriteData = new MapSpriteData();
+            
+            // Read tiles
+            int tileCount = reader.ReadInt32();
+            for (int i = 0; i < tileCount; i++)
+            {
+                var tile = new TileSpriteData
+                {
+                    Id = reader.ReadString(),
+                    Position = new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+                    FlipX = reader.ReadBoolean(),
+                    FlipY = reader.ReadBoolean(),
+                    Order = reader.ReadInt32(),
+                    Scale = reader.ReadSingle(),
+                    Color = new TileColorData
+                    {
+                        Red = reader.ReadSingle(),
+                        Green = reader.ReadSingle(),
+                        Blue = reader.ReadSingle(),
+                        Alpha = reader.ReadSingle()
+                    }
+                };
+                
+                spriteData.tiles.Add(tile);
+            }
+            
+            // Read fixtures
+            int fixtureCount = reader.ReadInt32();
+            for (int i = 0; i < fixtureCount; i++)
+            {
+                var fixture = new FixtureSpriteData
+                {
+                    Id = reader.ReadString(),
+                    Position = new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+                    FlipX = reader.ReadBoolean(),
+                    FlipY = reader.ReadBoolean(),
+                    Order = reader.ReadInt32(),
+                    Scale = new Vector2(reader.ReadSingle(), reader.ReadSingle()),
+                    Color = new TileColorData
+                    {
+                        Red = reader.ReadSingle(),
+                        Green = reader.ReadSingle(),
+                        Blue = reader.ReadSingle(),
+                        Alpha = reader.ReadSingle()
+                    }
+                };
+                
+                spriteData.fixtures.Add(fixture);
+            }
+            
+            return spriteData;
+        }
+        
+        /// <summary>
+        /// Get a map entry by ID, or null if not found
+        /// </summary>
+        public MapEntry GetMap(long mapId)
+        {
+            return Maps.TryGetValue(mapId, out var entry) ? entry : null;
+        }
+        
+        /// <summary>
+        /// Apply map data to a MapComponent
+        /// </summary>
+        public void ApplyToMapComponent(long mapId, MapComponent mapComponent)
+        {
+            if (mapComponent == null)
+            {
+                Debug.LogError("[MapDataContainer] Cannot apply to null MapComponent");
+                return;
+            }
+            
+            var entry = GetMap(mapId);
+            if (entry == null)
+            {
+                Debug.LogWarning($"[MapDataContainer] No map data found for ID {mapId}");
+                return;
+            }
+            
+            // Create mapInformation if needed
+            if (mapComponent.mapInformation == null)
+            {
+                mapComponent.mapInformation = new MapBasicInformation();
+            }
+            
+            // Set the map ID
+            mapComponent.mapInformation.id = (int)entry.Id;
+            
+            // Initialize cells dictionary if needed
+            if (mapComponent.mapInformation.cells == null)
+            {
+                mapComponent.mapInformation.cells = new SerializableDictionary<ushort, uint>();
+            }
+            
+            // Clear existing cells and copy from entry
+            mapComponent.mapInformation.cells.dictionary.Clear();
+            foreach (var pair in entry.Cells)
+            {
+                mapComponent.mapInformation.cells.dictionary[pair.Key] = pair.Value;
+            }
+            
+            // Update sprite data
+            if (entry.SpriteData != null)
+            {
+                // Create SpriteData if needed
+                if (mapComponent.mapInformation.SpriteData == null)
+                {
+                    mapComponent.mapInformation.SpriteData = new MapSpriteData();
+                }
+                
+                // Clear existing sprites
+                mapComponent.mapInformation.SpriteData.tiles.Clear();
+                mapComponent.mapInformation.SpriteData.fixtures.Clear();
+                
+                // Copy tiles
+                if (entry.SpriteData.tiles != null)
+                {
+                    foreach (var tile in entry.SpriteData.tiles)
+                    {
+                        mapComponent.mapInformation.SpriteData.tiles.Add(tile);
+                    }
+                }
+                
+                // Copy fixtures
+                if (entry.SpriteData.fixtures != null)
+                {
+                    foreach (var fixture in entry.SpriteData.fixtures)
+                    {
+                        mapComponent.mapInformation.SpriteData.fixtures.Add(fixture);
+                    }
+                }
+            }
+            
+            // Force serialization
+            mapComponent.mapInformation.cells.OnBeforeSerialize();
+            
+            // Mark as dirty in editor
+            #if UNITY_EDITOR
+            UnityEditor.EditorUtility.SetDirty(mapComponent);
+            #endif
+            
+            Debug.Log($"[MapDataContainer] Applied map {mapId} with {entry.Cells.Count} cells to MapComponent");
+        }
+        
+        /// <summary>
+        /// Legacy method to get map data as GridData
+        /// </summary>
+        public MapCreatorGridManager.GridData GetMapAsGridData(long mapId)
+        {
+            Debug.LogWarning("[MapDataContainer] Using deprecated GetMapAsGridData method - consider updating to use ApplyToMapComponent");
+            
             if (!Maps.TryGetValue(mapId, out var entry))
             {
                 Debug.LogWarning($"No map data found for ID {mapId}");
